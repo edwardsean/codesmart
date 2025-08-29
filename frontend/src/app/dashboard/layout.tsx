@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { Home, Upload, GitBranch, Users, Settings, LogOut } from "lucide-react";
 
@@ -9,10 +10,6 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (!session) {
-    return null;
-  }
-
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
     {
@@ -23,9 +20,10 @@ export default function DashboardLayout({
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
   ];
 
+  const pathname = usePathname();
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Top Navigation */}
       <nav className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
@@ -39,11 +37,9 @@ export default function DashboardLayout({
             </div>
 
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">
-                {session.user?.name || session.user?.email}
-              </span>
+              <span className="text-sm text-gray-700">Username</span>
               <button
-                onClick={() => signOut({ callbackUrl: "/" })}
+                // onClick={() => signOut({ callbackUrl: "/" })}
                 className="btn-secondary px-3 py-1 text-sm flex items-center gap-2"
               >
                 <LogOut className="w-4 h-4" />

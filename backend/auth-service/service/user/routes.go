@@ -131,7 +131,7 @@ func (handler *Handler) handleGithubCallback(w http.ResponseWriter, r *http.Requ
 		MaxAge:   60 * 60 * 24 * 7,
 	})
 
-	http.Redirect(w, r, "http://localhost:3000/login", http.StatusFound)
+	http.Redirect(w, r, "http://localhost:3000/dashboard", http.StatusFound)
 
 }
 
