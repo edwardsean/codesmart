@@ -1,0 +1,65 @@
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  neo4j:
+    image: neo4j:5
+    environment:
+      NEO4J_AUTH: ${NEO4J_AUTH}
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+    
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ./Dockerfile
+    container_name: codesmart-frontend
+    ports:
+      - "3000:3000"
+    volumes :
+      - ./frontend:/app
+      - /app/node_modules
+    environment: 
+      - NEXT_PUBLIC_GOLANG_API_URL=http://localhost:8080/api/v1
+
+  auth-service:
+    build:
+      context: ./backend
+      dockerfile: ./auth-service/Dockerfile
+    container_name: codesmart-auth-service
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      GITHUB_ID: ${GITHUB_ID}
+      GITHUB_SECRET: ${GITHUB_SECRET}
+      GOLANG_API_URL: ${GOLANG_API_URL}
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+  redis_data:
+  neo4j_data:

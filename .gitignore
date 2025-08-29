@@ -1,0 +1,77 @@
+# ------------------------
+# Go backend
+# ------------------------
+/backend/auth-service/app
+/backend/auth-service/app.exe
+/backend/auth-service/app.dSYM/
+/backend/auth-service/bin/
+/backend/auth-service/tmp/
+/backend/auth-service/vendor/
+/backend/auth-service/coverage.out
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace
+go.work
+go.work.sum
+
+# ------------------------
+# Node.js / Next.js frontend
+# ------------------------
+/frontend/node_modules/
+/frontend/.next/
+/frontend/out/
+/frontend/dist/
+/frontend/.turbo/
+/frontend/.vercel/
+/frontend/.cache/
+/frontend/coverage/
+
+# local env files
+/frontend/.env*
+/backend/.env*
+.env*
+
+# lockfiles (optional – keep if you want consistent installs)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# ------------------------
+# Docker
+# ------------------------
+/data/
+/tmp/
+/*.pid
+*.log
+
+# Docker build artifacts
+**/docker-compose.override.yml
+**/.docker
+**/.dockerignore
+
+# ------------------------
+# macOS & system files
+# ------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+ehthumbs.db
+Thumbs.db
+
+# ------------------------
+# IDE/editor
+# ------------------------
+.vscode/
+/.idea/
+/*.swp
+*.swo
+*.iml
