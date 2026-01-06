@@ -1,23 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 
 
-export function middleware(req: NextRequest) {
-    const access_token = req.cookies.get("access_token")?.value;
-    const protected_routes = ["/dashboard"]
+export async function middleware(req: NextRequest) {
+    const refresh_token = req.cookies.get("refresh_token")?.value;
+    const public_path = ["/login", "/signup", "/"]
+
 
     const url = req.nextUrl.clone()
+    const isPublicPath = public_path.includes(url.pathname)
 
     //if authenticated and visiting again
-    console.log("access token: ", access_token)
-    console.log("url pathname: ", url.pathname)
-    if(access_token && url.pathname == "/") {
+    if(refresh_token && isPublicPath) {
         url.pathname = "/dashboard"
         return NextResponse.redirect(url)
     }
     
     //if not authenticated and want to a protected page
-    if (!access_token && protected_routes.some((route) => req.nextUrl.pathname.startsWith(route))) {
-        const url = new URL("/login", req.url)
+    if (!refresh_token && !isPublicPath) {
+        url.pathname = "/login"
         return NextResponse.redirect(url)
     }
 

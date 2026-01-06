@@ -1,10 +1,13 @@
 package user
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
 
+	"github.com/edwardsean/codesmart/backend/auth-service/config"
+	"github.com/edwardsean/codesmart/backend/auth-service/service/auth"
 	"github.com/edwardsean/codesmart/backend/auth-service/types"
 	"github.com/edwardsean/codesmart/backend/auth-service/utils"
 	"gorm.io/gorm"
@@ -71,12 +74,25 @@ func (s *PostgreUserStore) GetOrCreateUserFromGithub(id int, username string, em
 			return nil, err
 		}
 	}
+	//hash access token to store to database
+	encryption_key64 := config.Envs.EncryptionKey
+	secretKey, err := base64.StdEncoding.DecodeString(encryption_key64)
 
-	err := s.db.Raw("SELECT * FROM users WHERE email = ?", email).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
 
-	//if doesnt exists
+	hashed_token, err := auth.Encrypt(access_token, secretKey)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.db.Raw("SELECT * FROM users WHERE email = ?", email).First(&user).Error
+
+	//if doesnt exist
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		new_user := types.User{Username: username, Email: email, Password: "", GitHubID: id}
+		new_user := types.User{Username: username, Email: email, Password: "", GitHubID: id, GithubToken: hashed_token}
 		result := s.db.Create(&new_user)
 
 		if result.Error != nil {
@@ -89,6 +105,12 @@ func (s *PostgreUserStore) GetOrCreateUserFromGithub(id int, username string, em
 	}
 
 	//if exists
+	if user.GithubToken != hashed_token {
+		user.GithubToken = hashed_token
+		if err := s.db.Save(&user).Error; err != nil {
+			return nil, err
+		}
+	}
 	return &user, nil
 
 }

@@ -17,6 +17,8 @@ type Config struct {
 	GithubClientID string
 	GithubSecret   string
 	GolangAPIURL   string
+	FrontendOrigin string
+	EncryptionKey  string
 }
 
 var Envs = initConfig()
@@ -33,6 +35,8 @@ func initConfig() *Config {
 		GithubClientID: getEnv("GITHUB_ID", "not-found"),
 		GithubSecret:   getEnv("GITHUB_SECRET", "not-found"),
 		GolangAPIURL:   getEnv("GOLANG_API_URL", "not-found"),
+		FrontendOrigin: getEnv("FRONTEND_ORIGIN", "http://localhost:3000"),
+		EncryptionKey:  getEnv("ENCRYPTION_KEY", "not-found"),
 	}
 }
 

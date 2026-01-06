@@ -24,17 +24,98 @@ func NewHandler(store types.UserStore) *Handler { //why take interface UserStore
 }
 
 func (handler *Handler) RegisterRoutes(router *mux.Router) {
-	auth := router.PathPrefix("/auth").Subrouter()
+	authrouter := router.PathPrefix("/auth").Subrouter()
 	// auth.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
 	// 	fmt.Println("handler", r.Header)
 	// 	w.WriteHeader(http.StatusOK)
 	// 	w.Write([]byte("OK"))
 	// })
 
-	auth.HandleFunc("/github/callback", handler.handleGithubCallback).Methods("GET")
-	auth.HandleFunc("/github/login", handler.handleGithubLogin).Methods("GET")
-	auth.HandleFunc("/login", handler.handleLogin).Methods("POST")
-	auth.HandleFunc("/register", handler.handleRegister).Methods("POST")
+	authrouter.HandleFunc("/me", auth.WithJWTAuth(handler.handleVerifyAuth, handler.store)).Methods("GET")
+
+	authrouter.HandleFunc("/refresh", handler.handleRefreshToken).Methods("POST")
+
+	authrouter.HandleFunc("/github/callback", handler.handleGithubCallback).Methods("GET")
+
+	authrouter.HandleFunc("/github/login", handler.handleGithubLogin).Methods("GET")
+
+	authrouter.HandleFunc("/login", handler.handleLogin).Methods("POST")
+
+	authrouter.HandleFunc("/register", handler.handleRegister).Methods("POST")
+
+	authrouter.HandleFunc("/logout", handler.handleLogout).Methods("POST")
+}
+
+func (handler *Handler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("refresh_token")
+
+	if err != nil {
+		log.Println("unable to get refresh token")
+		utils.WriteError(w, http.StatusUnauthorized, fmt.Errorf("unable to get refresh token"))
+		return
+	}
+
+	log.Printf("refresh token: %v", cookie.Value)
+
+	refreshToken := cookie.Value
+
+	//validate and get token claims
+	claims, err := auth.GetTokenClaims(refreshToken)
+
+	if err != nil {
+		log.Println(err)
+		utils.WriteError(w, http.StatusUnauthorized, err)
+		return
+	}
+
+	user, err := auth.GetUserFromClaims(claims, handler.store)
+
+	if err != nil {
+		log.Println(err)
+		utils.WriteError(w, http.StatusUnauthorized, err)
+		return
+	}
+
+	secret := []byte(config.Envs.JWTSecret)
+	access_token, err := auth.CreateJWT(secret, user.ID, 15*time.Minute)
+
+	if err != nil {
+		log.Println("unable to create access token")
+		utils.WriteError(w, http.StatusUnauthorized, fmt.Errorf("unable to create access token"))
+		return
+	}
+
+	log.Println("Setting access token")
+
+	log.Println("completed to set access token")
+
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"access_token": access_token})
+
+}
+
+func (handler *Handler) handleVerifyAuth(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(auth.UserKey).(*types.User)
+	if !ok || user == nil {
+		utils.WriteError(w, http.StatusUnauthorized, fmt.Errorf("no valid user in context"))
+		return
+	}
+
+	//to make sure it is safe to send to the front end
+	safeUser := types.SafeUser{
+		ID:        user.ID,
+		Email:     user.Email,
+		Username:  user.Username,
+		GitHubID:  user.GitHubID,
+		CreatedAt: user.CreatedAt,
+	}
+
+	accessToken, ok := r.Context().Value(auth.TokenKey).(string)
+	if !ok || accessToken == "" {
+		utils.WriteError(w, http.StatusUnauthorized, fmt.Errorf("no valid token in context"))
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, map[string]any{"access_token": accessToken, "user_data": safeUser})
 }
 
 func (handler *Handler) handleGithubCallback(w http.ResponseWriter, r *http.Request) {
@@ -60,8 +141,10 @@ func (handler *Handler) handleGithubCallback(w http.ResponseWriter, r *http.Requ
 	defer tokenResp.Body.Close() //must close it when done, otherwise it leaks connections. defer schedules it to run at the end of the function, so we dont have to remember to close it manually later.
 
 	body, _ := io.ReadAll(tokenResp.Body)
+	log.Printf("GitHub access token raw body: %s", string(body))
 	values, _ := url.ParseQuery(string(body))
 	ghAccessToken := values.Get("access_token")
+	log.Printf("Parsed ghAccessToken: %s", ghAccessToken)
 
 	if ghAccessToken == "" {
 		//ERROR HANDLING
@@ -70,7 +153,13 @@ func (handler *Handler) handleGithubCallback(w http.ResponseWriter, r *http.Requ
 	}
 
 	//get user from github
-	request, _ := http.NewRequest("GET", "https://api.github.com/user", nil)
+	request, err := http.NewRequest("GET", "https://api.github.com/user", nil)
+
+	if err != nil {
+		//ERROR HANDLING
+		return
+	}
+
 	request.Header.Set("Authorization", "token "+ghAccessToken)
 	resp, err := http.DefaultClient.Do(request)
 	if err != nil || resp.StatusCode != 200 {
@@ -98,12 +187,12 @@ func (handler *Handler) handleGithubCallback(w http.ResponseWriter, r *http.Requ
 	}
 
 	secret := []byte(config.Envs.JWTSecret)
-	access_token, err := auth.CreateJWT(secret, user.ID, 15*time.Minute)
+	// access_token, err := auth.CreateJWT(secret, user.ID, 15*time.Minute)
 
-	if err != nil {
-		// http.Redirect(w, r, "http://localhost:3000/login?error=access_token_creation_failure, http.StatusFound)
-		return
-	}
+	// if err != nil {
+	// 	// http.Redirect(w, r, "http://localhost:3000/login?error=access_token_creation_failure, http.StatusFound)
+	// 	return
+	// }
 
 	refresh_token, err := auth.CreateJWT(secret, user.ID, 7*24*time.Hour)
 	if err != nil {
@@ -112,26 +201,18 @@ func (handler *Handler) handleGithubCallback(w http.ResponseWriter, r *http.Requ
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
-		Value:    access_token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteDefaultMode,
-		MaxAge:   15 * 60,
-	})
-
-	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    refresh_token,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   false,
-		SameSite: http.SameSiteDefaultMode,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   60 * 60 * 24 * 7,
 	})
 
-	http.Redirect(w, r, "http://localhost:3000/dashboard", http.StatusFound)
+	log.Println("refresh token: ", refresh_token)
+
+	http.Redirect(w, r, "http://localhost/dashboard", http.StatusFound)
 
 }
 
@@ -139,7 +220,7 @@ func (handler *Handler) handleGithubLogin(w http.ResponseWriter, r *http.Request
 	uri := config.Envs.GolangAPIURL + "/auth/github/callback"
 	redirect := url.QueryEscape(uri)
 	URL := "https://github.com/login/oauth/authorize?client_id=" + config.Envs.GithubClientID +
-		"&redirect_uri=" + redirect + "&scope=user:email"
+		"&redirect_uri=" + redirect + "&scope=repo,user:email"
 
 	http.Redirect(w, r, URL, http.StatusFound)
 }
@@ -191,26 +272,16 @@ func (handler *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
-		Value:    access_token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteDefaultMode,
-		MaxAge:   15 * 60,
-	})
-
-	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token", //the browser will store this as "refresh token"
 		Value:    refresh_token,   //the refresh token
-		Path:     "/refresh",      //this means the cookie will be sent with all requests under /refresh
+		Path:     "/",             //this means the cookie will be sent with all requests under /
 		HttpOnly: true,            //so that javascript (document.cookie) cannot access this cookie.
 		Secure:   false,           //for https
-		SameSite: http.SameSiteDefaultMode,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   60 * 60 * 24 * 7, //7 days token expire
 	})
 
-	utils.WriteJSON(w, http.StatusOK, map[string]string{"token": access_token})
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"access_token": access_token})
 
 }
 
@@ -259,4 +330,28 @@ func (handler *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	utils.WriteJSON(w, http.StatusCreated, nil)
 
+}
+
+func (handler *Handler) handleLogout(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, //true if using https
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1, //expire immediately
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+	})
+
+	utils.WriteJSON(w, http.StatusOK, nil)
 }

@@ -33,21 +33,18 @@ services:
       context: ./frontend
       dockerfile: ./Dockerfile
     container_name: codesmart-frontend
-    ports:
-      - "3000:3000"
     volumes :
       - ./frontend:/app
       - /app/node_modules
     environment: 
-      - NEXT_PUBLIC_GOLANG_API_URL=http://localhost:8080/api/v1
+      NEXT_PUBLIC_GOLANG_API_URL: ${NEXT_PUBLIC_GOLANG_API_URL}
+      DOCKER_PUBLIC_GOLANG_API_URL: ${DOCKER_PUBLIC_GOLANG_API_URL}
 
   auth-service:
     build:
       context: ./backend
       dockerfile: ./auth-service/Dockerfile
     container_name: codesmart-auth-service
-    ports:
-      - "8080:8080"
     environment:
       DB_HOST: ${DB_HOST}
       DB_USER: ${DB_USER}
@@ -56,8 +53,20 @@ services:
       GITHUB_ID: ${GITHUB_ID}
       GITHUB_SECRET: ${GITHUB_SECRET}
       GOLANG_API_URL: ${GOLANG_API_URL}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     depends_on:
       - postgres
+
+  nginx:
+    image: nginx:alpine
+    ports: 
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/out:/usr/share/nginx/html:ro
+    depends_on:
+      - frontend
+      - auth-service
 
 volumes:
   postgres_data:

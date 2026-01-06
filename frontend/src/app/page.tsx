@@ -1,8 +1,9 @@
 import Link from "next/link";
+import AuthGate from "@/components/auth/AuthGate";
 
 export default function Home() {
   return (
-    <>
+    <AuthGate>
       <nav className="navbar">
         <div className="nav-content">
           <div className="logo">CodeSmart</div>
@@ -84,6 +85,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-    </>
+    </AuthGate>
   );
 }

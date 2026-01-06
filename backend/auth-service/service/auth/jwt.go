@@ -2,10 +2,12 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/edwardsean/codesmart/backend/auth-service/config"
@@ -16,7 +18,10 @@ import (
 
 type contextKey string
 
-const UserKey contextKey = "userID"
+const (
+	UserKey  contextKey = "userID"
+	TokenKey contextKey = "access_token"
+)
 
 func CreateJWT(secret []byte, userID int, duration time.Duration) (string, error) {
 	// expiration := time.Second * time.Duration(config.Envs.JWTExpirationInSeconds)
@@ -37,42 +42,30 @@ func CreateJWT(secret []byte, userID int, duration time.Duration) (string, error
 func WithJWTAuth(handlerFunc http.HandlerFunc, store types.UserStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		//get the token from the user request
-		cookie := getAccessTokenFromReq(r)
-		if cookie == nil {
-			permissionDenied(w)
+		access_token := getAccessTokenFromReq(r)
+		if access_token == "" {
+			writeUnauthorizedError(w, errors.New("missing access token"))
 			return
 		}
 
-		//validate the JWT
-		token, err := validateToken(cookie.Value)
+		//validate token and fetch claims
+		claims, err := GetTokenClaims(access_token)
 
 		if err != nil {
-			log.Printf("failed to validate token: %v", token)
-			permissionDenied(w)
+			writeUnauthorizedError(w, errors.New(err.Error()))
 			return
 		}
 
-		if !token.Valid {
-			log.Println("invalid token")
-			permissionDenied(w)
-			return
-		}
-
-		//fetch user from db
-		claims := token.Claims.(jwt.MapClaims)
-		str := claims["userId"].(string)
-
-		userId, _ := strconv.Atoi(str)
-
-		user, err := store.GetUserByID(userId)
+		user, err := GetUserFromClaims(claims, store)
 		if err != nil {
 			log.Printf("failed to get user by id: %v", err)
-			permissionDenied(w)
+			writeUnauthorizedError(w, fmt.Errorf("unable to get user from claims: %v", err))
 			return
 		}
 
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, UserKey, user.ID)
+		ctx = context.WithValue(ctx, UserKey, user)
+		ctx = context.WithValue(ctx, TokenKey, access_token)
 		r = r.WithContext((ctx)) //This is necessary because http.Request is immutable (you can’t just change its context directly)
 
 		handlerFunc(w, r)
@@ -81,17 +74,24 @@ func WithJWTAuth(handlerFunc http.HandlerFunc, store types.UserStore) http.Handl
 
 }
 
-func getAccessTokenFromReq(r *http.Request) *http.Cookie {
-	token, err := r.Cookie("access_token")
-	if err != nil || token.Value == "" {
-		return nil
+func getAccessTokenFromReq(r *http.Request) string {
+
+	authHeader := r.Header.Get("Authorization")
+	log.Println("Auth header:", authHeader)
+	if authHeader == "" {
+		return ""
 	}
 
-	return token
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		return ""
+	}
+
+	return parts[1]
 }
 
-func permissionDenied(w http.ResponseWriter) {
-	utils.WriteError(w, http.StatusForbidden, fmt.Errorf("permission denied"))
+func writeUnauthorizedError(w http.ResponseWriter, message error) {
+	utils.WriteError(w, http.StatusUnauthorized, message)
 }
 
 func validateToken(tokenString string) (*jwt.Token, error) {
@@ -110,4 +110,43 @@ func validateToken(tokenString string) (*jwt.Token, error) {
 
 	return token, nil
 
+}
+
+func GetTokenClaims(tokenString string) (jwt.MapClaims, error) {
+	token, err := validateToken(tokenString)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate token: %v", token)
+	}
+
+	//fetch user from db
+	claims, ok := token.Claims.(jwt.MapClaims)
+
+	if !ok || !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	if exp, ok := claims["expiredAt"].(float64); ok {
+		if int64(exp) < time.Now().Unix() {
+			return nil, fmt.Errorf("permission denied")
+		}
+	}
+
+	return claims, nil
+}
+
+func GetUserFromClaims(claims jwt.MapClaims, store types.UserStore) (*types.User, error) {
+	str, ok := claims["userID"].(string)
+	if !ok {
+		return nil, errors.New("user id interface is null, not string")
+	}
+
+	userId, _ := strconv.Atoi(str)
+
+	user, err := store.GetUserByID(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }

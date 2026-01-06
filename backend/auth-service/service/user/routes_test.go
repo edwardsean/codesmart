@@ -72,8 +72,7 @@ func TestUserService(t *testing.T) {
 	})
 }
 
-type mockUserStore struct {
-}
+type mockUserStore struct{}
 
 func (m *mockUserStore) GetUserByEmail(email string) (*types.User, error) {
 	return nil, fmt.Errorf("Error")
@@ -85,4 +84,8 @@ func (m *mockUserStore) GetUserByID(id int) (*types.User, error) {
 
 func (m *mockUserStore) CreateUser(types.User) error {
 	return nil
+}
+
+func (m *mockUserStore) GetOrCreateUserFromGithub(id int, email string, login string, access_token string, github_user *types.GithubUser) (*types.User, error) {
+	return nil, nil
 }
