@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useLayoutEffect(() => {
+    //everytime the token changes, update axios instance to put token in header
     const authInterceptor = instance.interceptors.request.use((config) => {
       config.headers = config.headers || {};
       config.headers.Authorization =
@@ -45,6 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [access_token]);
 
   useLayoutEffect(() => {
+    //we're only checking if there is an error
     const refreshInterceptor = instance.interceptors.response.use(
       (res) => res,
       async (error) => {
@@ -57,15 +59,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ) {
           console.log("refreshing token");
           try {
-            const response = await instance.post<{ access_token: string }>(
-              "/auth/refresh"
-            );
-            console.log("refresh token success: ", response.data.access_token);
+            const { access_token } = await api.refresh();
+            console.log("refresh token success: ", access_token);
 
-            setAccessToken(response.data.access_token);
+            setAccessToken(access_token);
 
             originalRequest._retry = true;
-            originalRequest.headers.Authorization = `Bearer ${response.data.access_token}`;
+            originalRequest.headers.Authorization = `Bearer ${access_token}`;
             return instance(originalRequest);
           } catch {
             setAccessToken(null);
@@ -73,12 +73,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        return Promise.reject(error);
+        return Promise.reject(error); //passess either 401 if refresh token fail or other error if error is not 401
       }
     );
 
     return () => {
-      instance.interceptors.request.eject(refreshInterceptor);
+      instance.interceptors.request.eject(refreshInterceptor); //cleanup
     };
   }, []);
 
@@ -95,3 +95,7 @@ export function useAuth() {
 
   return ctx;
 }
+
+//AuthProvider = Radio station that broadcasts (provides) auth state
+//useAuth() = Radio receiver that listens to the broadcast (consumes auth state)
+//Any component can "tune in" to get auth state without props

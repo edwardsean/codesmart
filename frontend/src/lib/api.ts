@@ -119,6 +119,7 @@ export const api = {
         email: email, 
         password: password
     }),
+    refresh: () => instance.post<{access_token: string}>("/auth/refresh").then(res => res.data),
     register: () => instance.post("/auth/register"),
     logout: () => instance.post("/auth/logout"),
     get_repositories: () => instance.get<{repositories: Repository[]}>("/getRepositories").then(res => res.data)
