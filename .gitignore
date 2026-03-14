@@ -51,6 +51,7 @@ go.work.sum
 /tmp/
 /*.pid
 *.log
+.air.toml
 
 # Docker build artifacts
 **/docker-compose.override.yml
@@ -75,3 +76,5 @@ Thumbs.db
 /*.swp
 *.swo
 *.iml
+
+

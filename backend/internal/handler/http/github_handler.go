@@ -34,6 +34,8 @@ func (h *GithubHandler) RegisterRoutes(router *mux.Router) {
 		fmt.Fprintln(w, "OK")
 	})
 	gitrouter.HandleFunc("/getRepositories", authMiddleware(h.handleGetRepositories)).Methods("GET")
+	// gitrouter.HandleFunc("/getRepositories", h.handleGetRepositories).Methods("GET")
+	//
 	// router.HandleFunc("/getRepositories", func(w http.ResponseWriter, r *http.Request) {
 	// 	token, err := r.Cookie("access_token")
 	// 	if err != nil || token.Value == "" {
@@ -58,6 +60,7 @@ func (h *GithubHandler) handleGetRepositories(w http.ResponseWriter, r *http.Req
 	repositories, err := h.githubService.GetUserRepositories(user)
 
 	if err != nil {
+		log.Fatalf("failed to get github repositories: %v", err)
 		response.WriteError(w, err)
 		return
 	}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useInitAuth";
 import Loading from "@/components/ui/Loading";
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {

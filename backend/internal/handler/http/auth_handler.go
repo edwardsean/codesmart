@@ -39,7 +39,8 @@ func (h *AuthHandler) RegisterRoutes(router *mux.Router) {
 
 	authMiddleware := middleware.WithJWTAuth(h.userService)
 
-	authrouter.HandleFunc("/me", authMiddleware(h.handleVerifyAuth)).Methods("GET")
+	authrouter.HandleFunc("/me", authMiddleware(h.handleMe)).Methods("GET")
+	// authrouter.HandleFunc("/me", h.handleVerifyAuth).Methods("GET")
 
 	authrouter.HandleFunc("/refresh", h.handleRefreshToken).Methods("POST")
 
@@ -93,10 +94,10 @@ func (h *AuthHandler) handleRefreshToken(w http.ResponseWriter, r *http.Request)
 
 }
 
-func (h *AuthHandler) handleVerifyAuth(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) handleMe(w http.ResponseWriter, r *http.Request) {
 	user, err := middleware.GetUserFromContext(r)
 	if err != nil {
-		response.WriteError(w, errors.NewError(err.Error(), http.StatusUnauthorized))
+		response.WriteError(w, errors.NewError("error in context", http.StatusUnauthorized))
 		return
 	}
 
@@ -110,12 +111,12 @@ func (h *AuthHandler) handleVerifyAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	accessToken, err := middleware.GetAccessTokenFromContext(r)
-	if err != nil {
-		response.WriteError(w, errors.NewError(err.Error(), http.StatusUnauthorized))
+	if err != nil || accessToken == "" {
+		response.WriteError(w, errors.NewError("error in access token", http.StatusUnauthorized))
 		return
 	}
 
-	response.WriteJSON(w, http.StatusOK, map[string]any{"access_token": accessToken, "user_data": safeUser})
+	response.WriteJSON(w, http.StatusOK, map[string]any{"user": safeUser})
 }
 
 func (h *AuthHandler) handleGithubCallback(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +142,7 @@ func (h *AuthHandler) handleGithubCallback(w http.ResponseWriter, r *http.Reques
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteStrictMode,
 		MaxAge:   60 * 60 * 24 * 7,
 	})
 
@@ -180,7 +181,7 @@ func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",             //this means the cookie will be sent with all requests under /
 		HttpOnly: true,            //so that javascript (document.cookie) cannot access this cookie.
 		Secure:   false,           //for https
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteStrictMode,
 		MaxAge:   60 * 60 * 24 * 7, //7 days token expire
 	})
 
@@ -214,9 +215,11 @@ func (h *AuthHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   false, //true if using https
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1, //expire immediately
 	})
+
+	//blacklist the token
 
 	response.WriteJSON(w, http.StatusOK, nil)
 }

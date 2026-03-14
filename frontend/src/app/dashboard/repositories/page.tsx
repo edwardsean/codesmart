@@ -1,3 +1,5 @@
+"use client";
+
 import { Suspense } from "react";
 import RepositoryWrapper from "@/components/repositories/RepositoryWrapper";
 import Loading from "@/components/ui/Loading";

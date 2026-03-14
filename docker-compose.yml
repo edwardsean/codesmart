@@ -7,9 +7,24 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  pgadmin:
+    container_name: pgadmin_container_codesmart
+    image: dpage/pgadmin4
+    environment: 
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-pgadmin4@pgadmin.org}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes: 
+      - pgadmin:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    restart: unless-stopped
+    depends_on:
+      - postgres
 
   redis:
     image: redis:7-alpine
@@ -17,34 +32,34 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-
-  neo4j:
-    image: neo4j:5
-    environment:
-      NEO4J_AUTH: ${NEO4J_AUTH}
-    ports:
-      - "7474:7474"
-      - "7687:7687"
-    volumes:
-      - neo4j_data:/data
+  
+  # neo4j:
+  #   image: neo4j:5
+  #   environment:
+  #     NEO4J_AUTH: ${NEO4J_AUTH}
+  #   ports:
+  #     - "7474:7474"
+  #     - "7687:7687"
+  #   volumes:
+  #     - neo4j_data:/data
     
   frontend:
     build:
       context: ./frontend
-      dockerfile: ./Dockerfile
+      dockerfile: ./Dockerfile.dev
     container_name: codesmart-frontend
     volumes :
       - ./frontend:/app
-      - /app/node_modules
+      - node_modules:/app/node_modules
     environment: 
       NEXT_PUBLIC_GOLANG_API_URL: ${NEXT_PUBLIC_GOLANG_API_URL}
       DOCKER_PUBLIC_GOLANG_API_URL: ${DOCKER_PUBLIC_GOLANG_API_URL}
 
-  auth-service:
+  backend:
     build:
       context: ./backend
-      dockerfile: ./auth-service/Dockerfile
-    container_name: codesmart-auth-service
+      dockerfile: ./Dockerfile.dev
+    container_name: codesmart-backend
     environment:
       DB_HOST: ${DB_HOST}
       DB_USER: ${DB_USER}
@@ -56,6 +71,11 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     depends_on:
       - postgres
+    volumes:
+      - ./backend:/app
+      - go_modules:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    command: air -c .air.toml
 
   nginx:
     image: nginx:alpine
@@ -66,9 +86,13 @@ services:
       - ./frontend/out:/usr/share/nginx/html:ro
     depends_on:
       - frontend
-      - auth-service
+      - backend
 
 volumes:
   postgres_data:
-  redis_data:
-  neo4j_data:
+  go_modules:
+  go_build_cache:
+  node_modules:
+  pgadmin:
+  # redis_data:
+  # neo4j_data:

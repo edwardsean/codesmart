@@ -28,5 +28,4 @@ var (
 	ErrInvalidPayload     = NewError("invalid payload", http.StatusBadRequest)
 	ErrInvalidCredentials = NewError("invalid email or password", http.StatusBadRequest)
 	ErrTokenGeneration    = NewError("failed to generate token", http.StatusInternalServerError)
-	ErrTokenGeneration = NewError("failed to generate token", http.StatusInternalServerError
 )

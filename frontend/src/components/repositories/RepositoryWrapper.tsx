@@ -1,44 +1,44 @@
+"use client;";
+
 import { Repository } from "@/types/entity";
 import { getLanguageColor } from "@/lib/utils";
 import Link from "next/link";
 import { AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
+import { useState, useEffect } from "react";
+import ErrorMessage from "../ui/Error";
 
 interface RepositoryCardProps {
   repository: Repository;
 }
 
-export default async function RepositoryWrapper() {
-  try {
-    // const cookieStore = cookies();
-    // const access_token = (await cookieStore).get("access_token");
+export default function RepositoryWrapper() {
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-    // if (access_token) {
-    //   const data = await api.get_repositories(access_token.value);
+  useEffect(() => {
+    const fetchRepositories = async () => {
+      try {
+        setError(null);
+        const data = await api.get_repositories();
+        setRepositories(data.repositories);
+      } catch {
+        setError("Failed to fetch repositories");
+      }
+    };
 
-    //   return (
-    //     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-    //       {data.repositories.map((repo) => (
-    //         <RepositoryCard key={repo.id} repository={repo} />
-    //       ))}
-    //     </div>
-    //   );
-    // } else {
-    //   throw new Error("access token not available");
-    // }
-    const data = await api.get_repositories();
-    console.error("data:", data);
-
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {data.repositories.map((repo) => (
-          <RepositoryCard key={repo.id} repository={repo} />
-        ))}
-      </div>
-    );
-  } catch (err: any) {
-    return <p>Error: {err.message}</p>;
+    fetchRepositories();
+  }, []);
+  if (error) {
+    return <ErrorMessage message={error} />;
   }
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {repositories.map((repo) => (
+        <RepositoryCard key={repo.id} repository={repo} />
+      ))}
+    </div>
+  );
 }
 
 export function RepositoryCard({ repository }: RepositoryCardProps) {

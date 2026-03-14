@@ -2,13 +2,17 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-COPY ./backend/go.mod ./backend/go.sum ./
+#copy go mod and sum files
+COPY go.mod go.sum ./
 
+#download dependencies
 RUN go mod download
 
-COPY ./backend .
+#copy all source code
+COPY . .
 
-RUN go build -o app ./cmd
+#build the binary from cmd/api directory, the binary will be named "main" and placed in /app
+RUN go build -o main ./cmd/api
 
 FROM alpine:3.20
 
@@ -21,9 +25,9 @@ RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
-COPY --from=builder /app/app .
+COPY --from=builder /app/main ./main
 
-CMD ["./app"]
+CMD ["./main"]
 
 
 

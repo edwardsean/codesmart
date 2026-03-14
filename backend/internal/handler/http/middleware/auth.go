@@ -26,9 +26,10 @@ func WithJWTAuth(service domain.UserService) func(http.HandlerFunc) http.Handler
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			//get the token from the user request
-			access_token := getAccessTokenFromReq(r)
-			if access_token == "" {
-				writeUnauthorizedError(w, stdError.New("missing access token"))
+			access_token, err := getAccessTokenFromReq(r)
+			if err != nil {
+				// writeUnauthorizedError(w, stdError.New("permission denied"))
+				writeUnauthorizedError(w, err)
 				return
 			}
 
@@ -63,20 +64,20 @@ func WithJWTAuth(service domain.UserService) func(http.HandlerFunc) http.Handler
 	}
 }
 
-func getAccessTokenFromReq(r *http.Request) string {
+func getAccessTokenFromReq(r *http.Request) (string, error) {
 
 	authHeader := r.Header.Get("Authorization")
 	log.Println("Auth header:", authHeader)
 	if authHeader == "" {
-		return ""
+		return "", stdError.New("no authorization header")
 	}
 
 	parts := strings.SplitN(authHeader, " ", 2)
 	if len(parts) != 2 || parts[0] != "Bearer" {
-		return ""
+		return "", stdError.New("invalid authorization header")
 	}
 
-	return parts[1]
+	return parts[1], nil
 }
 
 func GetUserFromContext(r *http.Request) (*domain.User, error) {

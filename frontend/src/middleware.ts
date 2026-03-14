@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
+const public_path = ["/login", "/signup", "/"]
 
 export async function middleware(req: NextRequest) {
     const refresh_token = req.cookies.get("refresh_token")?.value;
-    const public_path = ["/login", "/signup", "/"]
 
 
     const url = req.nextUrl.clone()

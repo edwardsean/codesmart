@@ -1,0 +1,20 @@
+FROM golang:1.25-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache git && \
+    go install github.com/air-verse/air@latest
+
+
+COPY go.mod go.sum ./
+
+RUN go mod download
+
+#will be overwritten by volume mount in docker-compose.yml
+COPY . . 
+
+EXPOSE 8080
+
+# CMD ["go", "run", "./cmd/api/main.go"]
+
+CMD ["air", "-c", ".air.toml"]

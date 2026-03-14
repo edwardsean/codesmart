@@ -1,11 +1,11 @@
 build:
-	@go build -o bin/auth-service cmd/main.go
+	@go build -o bin/backend cmd/api/main.go
 
 test:
 	@go test -v ./...
 
 run: build
-	@./bin/auth-service
+	@./bin/backend
 
 #Database Migration
 
