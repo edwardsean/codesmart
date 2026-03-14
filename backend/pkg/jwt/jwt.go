@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -53,7 +54,7 @@ func GetTokenClaims(tokenString string) (jwt.MapClaims, error) {
 	claims, ok := token.Claims.(jwt.MapClaims)
 
 	if !ok || !token.Valid {
-		return nil, fmt.Errorf("invalid token")
+		return nil, errors.New("invalid token")
 	}
 
 	if exp, ok := claims["expiredAt"].(float64); ok {
@@ -63,6 +64,25 @@ func GetTokenClaims(tokenString string) (jwt.MapClaims, error) {
 	}
 
 	return claims, nil
+}
+
+func GetUserIDFromToken(token string) (int, error) {
+	claims, err := GetTokenClaims(token)
+	if err != nil {
+		return 0, err
+	}
+
+	userIDstr, ok := claims["userID"].(string)
+	if !ok {
+		return 0, errors.New("invalid user ID in token")
+	}
+
+	userID, err := strconv.Atoi(userIDstr)
+	if err != nil {
+		return 0, errors.New("invalid user ID format")
+	}
+
+	return userID, nil
 }
 
 // func GetUserFromClaims(claims jwt.MapClaims, store domain.UserStore) (*domain.User, error) {

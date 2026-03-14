@@ -7,6 +7,7 @@ import (
 
 	"github.com/edwardsean/codesmart/backend/internal/domain"
 	"github.com/edwardsean/codesmart/backend/internal/handler/http/middleware"
+	"github.com/edwardsean/codesmart/backend/internal/service"
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
 	"github.com/edwardsean/codesmart/backend/pkg/response"
 
@@ -15,17 +16,17 @@ import (
 
 type GithubHandler struct {
 	// repository_store domain.RepositoryStore
-	githubService domain.GithubService
-	userService   domain.UserService
+	githubService service.GithubService
+	authService   service.AuthService
 }
 
-func NewGithubHandler(githubService domain.GithubService, userService domain.UserService) *GithubHandler {
-	return &GithubHandler{githubService: githubService, userService: userService}
+func NewGithubHandler(githubService service.GithubService, authService service.AuthService) *GithubHandler {
+	return &GithubHandler{githubService: githubService, authService: authService}
 }
 
 func (h *GithubHandler) RegisterRoutes(router *mux.Router) {
 	gitrouter := router.PathPrefix("/github").Subrouter()
-	authMiddleware := middleware.WithJWTAuth(h.userService)
+	authMiddleware := middleware.WithJWTAuth(h.authService)
 	gitrouter.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
 		// fmt.Println("handler", r.Header)
 		// w.WriteHeader(http.StatusOK)
@@ -56,8 +57,7 @@ func (h *GithubHandler) handleGetRepositories(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var repositories *[]domain.Repository
-	repositories, err := h.githubService.GetUserRepositories(user)
+	repositories, err := h.githubService.GetUserRepositories(r.Context(), user)
 
 	if err != nil {
 		log.Fatalf("failed to get github repositories: %v", err)

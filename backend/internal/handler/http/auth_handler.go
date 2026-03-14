@@ -8,7 +8,9 @@ import (
 
 	"github.com/edwardsean/codesmart/backend/internal/config"
 	"github.com/edwardsean/codesmart/backend/internal/domain"
+	"github.com/edwardsean/codesmart/backend/internal/dto"
 	"github.com/edwardsean/codesmart/backend/internal/handler/http/middleware"
+	"github.com/edwardsean/codesmart/backend/internal/service"
 	"github.com/edwardsean/codesmart/backend/pkg/jwt"
 
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
@@ -19,12 +21,12 @@ import (
 //handler : req/res, validation,  JSON parsing
 
 type AuthHandler struct {
-	userService  domain.UserService //dont need pointer because interface is already a reference type
-	oauthService domain.OAuthService
-	authService  domain.AuthService
+	userService  service.UserService //dont need pointer because interface is already a reference type
+	oauthService service.OAuthService
+	authService  service.AuthService
 }
 
-func NewAuthHandler(userService domain.UserService, oauthService domain.OAuthService, authService domain.AuthService) *AuthHandler { //why take interface UserStore? so that Future-proofing: switch from Postgres → MySQL → Firestore without touching handler logic.
+func NewAuthHandler(userService service.UserService, oauthService service.OAuthService, authService service.AuthService) *AuthHandler { //why take interface UserStore? so that Future-proofing: switch from Postgres → MySQL → Firestore without touching handler logic.
 	return &AuthHandler{userService: userService, oauthService: oauthService, authService: authService}
 }
 
@@ -37,7 +39,7 @@ func (h *AuthHandler) RegisterRoutes(router *mux.Router) {
 	// })
 	// authMiddleware := middleware.WithJWTAuth(handler.store)
 
-	authMiddleware := middleware.WithJWTAuth(h.userService)
+	authMiddleware := middleware.WithJWTAuth(h.authService)
 
 	authrouter.HandleFunc("/me", authMiddleware(h.handleMe)).Methods("GET")
 	// authrouter.HandleFunc("/me", h.handleVerifyAuth).Methods("GET")
@@ -70,7 +72,7 @@ func (h *AuthHandler) handleRefreshToken(w http.ResponseWriter, r *http.Request)
 
 	//validate and get token claims
 	// user, err := auth.GetUserFromClaims(claims, store)
-	user, err := h.userService.GetUserFromToken(refreshToken)
+	user, err := h.authService.GetUserFromToken(r.Context(), refreshToken)
 	if err != nil {
 		log.Println(err)
 		response.WriteError(w, errors.NewError(err.Error(), http.StatusUnauthorized))
@@ -110,12 +112,6 @@ func (h *AuthHandler) handleMe(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: user.CreatedAt,
 	}
 
-	accessToken, err := middleware.GetAccessTokenFromContext(r)
-	if err != nil || accessToken == "" {
-		response.WriteError(w, errors.NewError("error in access token", http.StatusUnauthorized))
-		return
-	}
-
 	response.WriteJSON(w, http.StatusOK, map[string]any{"user": safeUser})
 }
 
@@ -129,7 +125,7 @@ func (h *AuthHandler) handleGithubCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	refresh_token, err := h.oauthService.HandleGithubCallback(code)
+	refresh_token, err := h.oauthService.HandleGithubCallback(r.Context(), code)
 	if err != nil {
 		//ERROR HANDLING
 		log.Printf("error in github callback: %v", err)
@@ -153,7 +149,7 @@ func (h *AuthHandler) handleGithubCallback(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *AuthHandler) handleGithubLogin(w http.ResponseWriter, r *http.Request) {
-	uri := config.Envs.GolangAPIURL + "/auth/github/callback"
+	uri := config.Envs.FrontendOrigin + "/api/auth/github/callback"
 	redirect := url.QueryEscape(uri)
 	URL := "https://github.com/login/oauth/authorize?client_id=" + config.Envs.GithubClientID +
 		"&redirect_uri=" + redirect + "&scope=repo,user:email"
@@ -162,14 +158,14 @@ func (h *AuthHandler) handleGithubLogin(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
-	var payload domain.LoginUserPayload
+	var payload dto.LoginUserPayload
 
 	if err := response.ParseJson(r.Body, &payload); err != nil {
 		response.WriteError(w, errors.NewError(err.Error(), http.StatusBadRequest))
 		return
 	}
 
-	access_token, refresh_token, err := h.authService.Login(payload)
+	access_token, refresh_token, err := h.authService.Login(r.Context(), payload)
 	if err != nil {
 		response.WriteError(w, err)
 		return
@@ -191,14 +187,14 @@ func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func (handler *AuthHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	//receive JSON payload
-	var payload domain.RegisterUserPayload
+	var payload dto.RegisterUserPayload
 
 	if err := response.ParseJson(r.Body, &payload); err != nil {
 		response.WriteError(w, errors.NewError(err.Error(), http.StatusBadRequest))
 		return
 	}
 
-	err := handler.authService.Register(payload)
+	err := handler.authService.Register(r.Context(), payload)
 	if err != nil {
 		response.WriteError(w, err)
 		return
@@ -209,6 +205,12 @@ func (handler *AuthHandler) handleRegister(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *AuthHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
+	//get cookie
+	cookie, err := r.Cookie("refresh_token")
+	if err == nil {
+		h.authService.Logout(r.Context(), cookie.Value)
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    "",
@@ -218,8 +220,6 @@ func (h *AuthHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1, //expire immediately
 	})
-
-	//blacklist the token
 
 	response.WriteJSON(w, http.StatusOK, nil)
 }

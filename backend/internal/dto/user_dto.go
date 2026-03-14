@@ -1,4 +1,4 @@
-package domain
+package dto
 
 type RegisterUserPayload struct {
 	Username string `json:"username" validate:"required"`

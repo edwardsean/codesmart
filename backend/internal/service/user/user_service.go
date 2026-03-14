@@ -1,39 +1,22 @@
 package user
 
 import (
-	stdError "errors"
-	"strconv"
+	"context"
 
 	"github.com/edwardsean/codesmart/backend/internal/domain"
-	"github.com/edwardsean/codesmart/backend/pkg/jwt"
+	"github.com/edwardsean/codesmart/backend/internal/repository"
 )
 
 type UserService struct {
-	store domain.UserRepository
+	userRepo repository.UserRepository
 }
 
-func NewUserService(store domain.UserRepository) *UserService {
-	return &UserService{store: store}
+func NewUserService(userRepo repository.UserRepository) *UserService {
+	return &UserService{userRepo: userRepo}
 }
 
-func (s *UserService) GetUserFromToken(token string) (*domain.User, error) {
-	claims, err := jwt.GetTokenClaims(token)
-	if err != nil {
-		return nil, err
-	}
-
-	userIDstr, ok := claims["userID"].(string)
-	if !ok {
-		return nil, stdError.New("invalid user ID in token")
-	}
-
-	userId, _ := strconv.Atoi(userIDstr)
-
-	return s.store.GetUserByID(userId)
-}
-
-func (s *UserService) GetUserByEmail(email string) (*domain.User, error) {
-	user, err := s.store.GetUserByEmail(email)
+func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+	user, err := s.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
 		return nil, err
 	}

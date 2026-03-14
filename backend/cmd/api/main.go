@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 
+	"github.com/edwardsean/codesmart/backend/internal/config"
 	"github.com/edwardsean/codesmart/backend/internal/handler/http"
 	"github.com/edwardsean/codesmart/backend/internal/repository/postgres"
 	"gorm.io/gorm"
@@ -18,7 +19,7 @@ func main() { //create a server instance
 
 	initDatabase(db)
 
-	server := http.NewAPIServer(":8080", db)
+	server := http.NewAPIServer(config.Envs.BackendOrigin, db)
 
 	if err := server.Run(); err != nil {
 		log.Fatal(err)

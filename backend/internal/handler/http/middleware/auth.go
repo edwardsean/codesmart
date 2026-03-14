@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/edwardsean/codesmart/backend/internal/domain"
+	"github.com/edwardsean/codesmart/backend/internal/service"
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
 	"github.com/edwardsean/codesmart/backend/pkg/response"
 )
@@ -22,7 +23,7 @@ const (
 )
 
 // make it to return a handler function
-func WithJWTAuth(service domain.UserService) func(http.HandlerFunc) http.HandlerFunc {
+func WithJWTAuth(service service.AuthService) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			//get the token from the user request
@@ -34,7 +35,7 @@ func WithJWTAuth(service domain.UserService) func(http.HandlerFunc) http.Handler
 			}
 
 			//validate token and fetch claims
-			user, err := service.GetUserFromToken(access_token)
+			user, err := service.GetUserFromToken(r.Context(), access_token)
 			if err != nil {
 				writeUnauthorizedError(w, err)
 				return

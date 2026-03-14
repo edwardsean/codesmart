@@ -16,9 +16,10 @@ type Config struct {
 	JWTSecret      string
 	GithubClientID string
 	GithubSecret   string
-	GolangAPIURL   string
+	BackendOrigin  string
 	FrontendOrigin string
 	EncryptionKey  string
+	RedisAddr      string
 }
 
 var Envs = initConfig()
@@ -34,9 +35,10 @@ func initConfig() *Config {
 		JWTSecret:      getEnv("JWT_SECRET", "jwt-secret-notfound"),
 		GithubClientID: getEnv("GITHUB_ID", "not-found"),
 		GithubSecret:   getEnv("GITHUB_SECRET", "not-found"),
-		GolangAPIURL:   getEnv("GOLANG_API_URL", "not-found"),
+		BackendOrigin:  getEnv("BACKEND_ORIGIN", "not-found"),
 		FrontendOrigin: getEnv("FRONTEND_ORIGIN", "http://localhost:3000"),
 		EncryptionKey:  getEnv("ENCRYPTION_KEY", "not-found"),
+		RedisAddr:      getEnv("REDIS_ADDR", "not-found"),
 	}
 }
 

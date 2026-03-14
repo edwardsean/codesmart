@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -11,34 +12,51 @@ import (
 
 	"github.com/edwardsean/codesmart/backend/internal/config"
 	"github.com/edwardsean/codesmart/backend/internal/domain"
+	"github.com/edwardsean/codesmart/backend/internal/repository"
 	"github.com/edwardsean/codesmart/backend/pkg/jwt"
 	"github.com/edwardsean/codesmart/backend/pkg/response"
 )
 
 type oauthService struct {
-	userRepo   domain.UserRepository
+	userRepo   repository.UserRepository
 	httpClient *http.Client
 }
 
-func NewOAuthService(userRepo domain.UserRepository) *oauthService {
+func NewOAuthService(userRepo repository.UserRepository) *oauthService {
 	return &oauthService{
 		userRepo:   userRepo,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-func (s *oauthService) exchangeCodeForToken(code string) (string, error) {
-	resp, err := s.httpClient.PostForm("https://github.com/login/oauth/access_token",
-		url.Values{
-			"client_id":     {config.Envs.GithubClientID},
-			"client_secret": {config.Envs.GithubSecret},
-			"code":          {code},
-		})
+func (s *oauthService) exchangeCodeForToken(ctx context.Context, code string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx,
+		http.MethodPost,
+		"https://github.com/login/oauth/access_token",
+		nil,
+	)
+	//http.DefaultClient has no timeout — if GitHub never responds, your goroutine hangs forever. Fine for quick scripts, dangerous in a server.
+	//you control the timeout
+	//httpClient: &http.Client{Timeout: 10 * time.Second}
+	//you can't use package-level functions with context
+	//context support — requires building request manually + client.Do() req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, nil) s.httpClient.Do(req)
 
 	if err != nil {
 		return "", err
 	}
 
+	q := url.Values{
+		"client_id":     {config.Envs.GithubClientID},
+		"client_secret": {config.Envs.GithubSecret},
+		"code":          {code},
+	}
+	req.URL.RawQuery = q.Encode()
+	req.Header.Set("Accept", "application/x-www-form-urlencoded")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
 	defer resp.Body.Close() //must close it when done, otherwise it leaks connections. defer schedules it to run at the end of the function, so we dont have to remember to close it manually later.
 
 	body, err := io.ReadAll(resp.Body)
@@ -62,9 +80,9 @@ func (s *oauthService) exchangeCodeForToken(code string) (string, error) {
 
 }
 
-func (s *oauthService) getGithubUser(accessToken string) (*domain.GithubUser, error) {
+func (s *oauthService) getGithubUser(ctx context.Context, accessToken string) (*domain.GithubUser, error) {
 	//get user from github
-	request, err := http.NewRequest("GET", "https://api.github.com/user", nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/user", nil)
 
 	if err != nil {
 		//ERROR HANDLING
@@ -96,7 +114,7 @@ func (s *oauthService) getGithubUser(accessToken string) (*domain.GithubUser, er
 	return &github_user, nil
 }
 
-func (s *oauthService) HandleGithubCallback(code string) (string, error) {
+func (s *oauthService) HandleGithubCallback(ctx context.Context, code string) (string, error) {
 	// uri := config.Envs.GolangAPIURL + "/auth/github/callback"
 	// tokenResp, err := http.PostForm("https://github.com/login/oauth/access_token", url.Values{"client_id": {config.Envs.GithubClientID}, "client_secret": {config.Envs.GithubSecret}, "code": {code}, "redirect_uri": {uri}}) //returns a tokenResp.body
 
@@ -120,15 +138,22 @@ func (s *oauthService) HandleGithubCallback(code string) (string, error) {
 
 	// 	return
 	// }
-	ghAccessToken, err := s.exchangeCodeForToken(code)
+	ghAccessToken, err := s.exchangeCodeForToken(ctx, code)
 	if err != nil {
 		return "", err
 	}
 
-	github_user, err := s.getGithubUser(ghAccessToken)
+	github_user, err := s.getGithubUser(ctx, ghAccessToken)
 
+	if github_user.Email == "" {
+		email, err := s.getGithubEmail(ctx, ghAccessToken)
+		if err != nil {
+			return "", err
+		}
+		github_user.Email = email
+	}
 	//get or create user for this github account
-	user, err := s.userRepo.GetOrCreateUserFromGithub(github_user.ID, github_user.Login, github_user.Email, ghAccessToken, github_user)
+	user, err := s.userRepo.GetOrCreateUserFromGithub(ctx, github_user.ID, github_user.Login, github_user.Email, ghAccessToken, github_user)
 
 	if err != nil {
 		// http.Redirect(w, r, "http://localhost:3000/login?error=user_db_fetching_failed_for_github, http.StatusFound)
@@ -150,4 +175,36 @@ func (s *oauthService) HandleGithubCallback(code string) (string, error) {
 	}
 
 	return refresh_token, nil
+}
+
+func (s *oauthService) getGithubEmail(ctx context.Context, access_token string) (string, error) {
+	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/user/emails", nil)
+	request.Header.Set("Authorization", "token "+access_token)
+	resp, err := s.httpClient.Do(request)
+
+	if err != nil || resp.StatusCode != 200 {
+		return "", fmt.Errorf("failed to fetch GitHub emails, status: %d, err: %w", resp.StatusCode, err)
+	}
+
+	defer resp.Body.Close()
+
+	var emails []struct {
+		Email      string `json:"email"`
+		Verified   bool   `json:"verified"`
+		Primary    bool   `json:"primary"`
+		Visibility string `json:"visibility"`
+	}
+
+	if err := response.ParseJson(resp.Body, &emails); err != nil {
+		return "", err
+	}
+
+	for _, e := range emails {
+		if e.Primary && e.Verified {
+			return e.Email, nil
+		}
+	}
+
+	return "", fmt.Errorf("no primary email found")
+
 }
