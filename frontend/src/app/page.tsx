@@ -9,12 +9,12 @@ export default function Home() {
           <div className="logo">CodeSmart</div>
           <div className="flex items-center gap-4">
             <Link
-              href="/login"
+              href="/auth/login"
               className="text-gray-600 hover:text-red-600 font-medium transition-colors"
             >
               Sign In
             </Link>
-            <Link href="/signup">
+            <Link href="/auth/signup">
               <button className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors">
                 Get Started
               </button>

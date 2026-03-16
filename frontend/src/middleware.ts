@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const public_path = ["/login", "/signup", "/"]
+const public_path = ["/auth/login", "/auth/signup", "/"]
 
 export async function middleware(req: NextRequest) {
     const refresh_token = req.cookies.get("refresh_token")?.value;
@@ -17,7 +17,7 @@ export async function middleware(req: NextRequest) {
     
     //if not authenticated and want to a protected page
     if (!refresh_token && !isPublicPath) {
-        url.pathname = "/login"
+        url.pathname = "/auth/login"
         return NextResponse.redirect(url)
     }
 

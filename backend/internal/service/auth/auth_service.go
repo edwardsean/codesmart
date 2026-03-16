@@ -29,47 +29,54 @@ func NewAuthService(userRepo repository.UserRepository, tokenRepo repository.Tok
 	}
 }
 
-func (s *AuthService) Login(ctx context.Context, payload dto.LoginUserPayload) (string, string, error) {
+func (s *AuthService) Login(ctx context.Context, payload dto.LoginUserPayload) (string, string, *dto.UserResponseDTO, error) {
 	if err := validator.Validate.Struct(payload); err != nil {
-		return "", "", stdError.New("invalid payload")
+		return "", "", nil, stdError.New("invalid payload")
 	}
 
 	user, err := s.userRepo.GetUserByEmail(ctx, payload.Email)
 	if err != nil {
 		// response.WriteError(w, http.StatusBadRequest, fmt.Errorf("not found, invalid email or password"))
-		return "", "", errors.ErrInvalidCredentials
+		return "", "", nil, errors.ErrInvalidCredentials
 	}
 
 	if !password.ComparePassword(user.Password, []byte(payload.Password)) {
-		return "", "", errors.ErrInvalidCredentials
+		return "", "", nil, errors.ErrInvalidCredentials
 	}
 
 	secret := []byte(config.Envs.JWTSecret)
 	access_token, err := jwt.CreateJWT(secret, user.ID, 15*time.Minute)
 
 	if err != nil {
-		return "", "", errors.ErrTokenGeneration
+		return "", "", nil, errors.ErrTokenGeneration
 	}
 
 	refresh_token, err := jwt.CreateJWT(secret, user.ID, 7*24*time.Hour)
 	if err != nil {
-		return "", "", errors.ErrTokenGeneration
+		return "", "", nil, errors.ErrTokenGeneration
 	}
 
-	return access_token, refresh_token, nil
+	userResponse := s.ChangeToUserResponseDTO(user)
+
+	return access_token, refresh_token, userResponse, nil
 }
 
-func (s *AuthService) Register(ctx context.Context, payload dto.RegisterUserPayload) error {
+func (s *AuthService) Register(ctx context.Context, payload dto.RegisterUserPayload) (string, string, *dto.UserResponseDTO, error) {
 	// validate payload
 	if err := validator.Validate.Struct(payload); err != nil {
 		// errors := err.(validator.ValidationErrors)
-		return errors.ErrInvalidPayload
+		return "", "", nil, errors.ErrInvalidPayload
+	}
+
+	//check confirm password and password match
+	if payload.ConfirmPassword != payload.Password {
+		return "", "", nil, errors.NewError("passwords do not match", http.StatusBadRequest)
 	}
 
 	//check if user exists
 	user, err := s.userRepo.GetUserByEmail(ctx, payload.Email)
 	if err == nil {
-		return errors.NewError(fmt.Sprintf("user with email %s already exists, response: %v", payload.Email, user), http.StatusBadRequest)
+		return "", "", nil, errors.NewError(fmt.Sprintf("user with email %s already exists", payload.Email), http.StatusBadRequest)
 	}
 
 	//if it doesnt, we create the new user
@@ -77,7 +84,7 @@ func (s *AuthService) Register(ctx context.Context, payload dto.RegisterUserPayl
 	hash_password, err := password.HashPassword(payload.Password)
 
 	if err != nil {
-		return errors.NewError(err.Error(), http.StatusInternalServerError)
+		return "", "", nil, errors.NewError(err.Error(), http.StatusInternalServerError)
 	}
 
 	err = s.userRepo.CreateUser(ctx, &domain.User{
@@ -87,10 +94,24 @@ func (s *AuthService) Register(ctx context.Context, payload dto.RegisterUserPayl
 	})
 
 	if err != nil {
-		return errors.NewError(err.Error(), http.StatusInternalServerError)
+		return "", "", nil, errors.NewError(err.Error(), http.StatusInternalServerError)
 	}
 
-	return nil
+	secret := []byte(config.Envs.JWTSecret)
+	access_token, err := jwt.CreateJWT(secret, user.ID, 15*time.Minute)
+
+	if err != nil {
+		return "", "", nil, errors.ErrTokenGeneration
+	}
+
+	refresh_token, err := jwt.CreateJWT(secret, user.ID, 7*24*time.Hour)
+	if err != nil {
+		return "", "", nil, errors.ErrTokenGeneration
+	}
+
+	userResponse := s.ChangeToUserResponseDTO(user)
+
+	return access_token, refresh_token, userResponse, nil
 }
 
 func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
@@ -132,4 +153,13 @@ func (s *AuthService) GetUserFromToken(ctx context.Context, token string) (*doma
 	}
 
 	return s.userRepo.GetUserByID(ctx, userID)
+}
+
+func (s *AuthService) ChangeToUserResponseDTO(user *domain.User) *dto.UserResponseDTO {
+	return &dto.UserResponseDTO{
+		ID:        user.ID,
+		Email:     user.Email,
+		Username:  user.Username,
+		CreatedAt: user.CreatedAt,
+	}
 }

@@ -20,8 +20,8 @@ type OAuthService interface {
 }
 
 type AuthService interface {
-	Login(ctx context.Context, payload dto.LoginUserPayload) (string, string, error)
-	Register(ctx context.Context, payload dto.RegisterUserPayload) error
+	Login(ctx context.Context, payload dto.LoginUserPayload) (string, string, *dto.UserResponseDTO, error)
+	Register(ctx context.Context, payload dto.RegisterUserPayload) (string, string, *dto.UserResponseDTO, error)
 	Logout(ctx context.Context, refreshToken string) error
 	ValidateRefreshToken(ctx context.Context, refreshToken string) (*domain.User, error)
 	GetUserFromToken(ctx context.Context, token string) (*domain.User, error)

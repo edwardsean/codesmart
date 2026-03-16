@@ -1,13 +1,11 @@
 package dto
 
-type RegisterUserPayload struct {
-	Username string `json:"username" validate:"required"`
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=6,max=13"`
-	GitHubID int    `json:"github_id,omitempty"`
-}
+import "time"
 
-type LoginUserPayload struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required"`
+type UserResponseDTO struct {
+	ID        int       `json:"id"`
+	Email     string    `json:"email"`
+	Username  string    `json:"username"`
+	GithubID  int       `json:"github_id,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
 }

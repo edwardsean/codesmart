@@ -25,7 +25,7 @@ type Config struct {
 var Envs = initConfig()
 
 func initConfig() *Config {
-	godotenv.Load("./backend/auth-service/.env")
+	godotenv.Load("../../.env")
 	return &Config{
 		DBHost:         getEnv("DB_HOST", "localhost"),
 		DBUser:         getEnv("DB_USER", "root"),

@@ -1,30 +1,71 @@
 "use client";
 
+import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { Github } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { loginSchema, LoginFormData } from "@/lib/schemas/authSchema";
+import { useSearchParams, useRouter } from "next/navigation";
+import { authService } from "@/services/authService";
+import { useAuthStore } from "@/stores/authStore";
+import axios from "axios";
 
 export default function LoginForm() {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+  });
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/";
+  const { setAuth } = useAuthStore();
+
+  const [error, setError] = useState<string>("");
+
   const handleGitHubLogin = () => {
-    window.location.href = `${process.env.NEXT_PUBLIC_GOLANG_API_URL}/auth/github/login`;
+    window.location.href = `${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/github/login`;
   };
+
+  const onSubmit = async (data: LoginFormData) => {
+    try {
+      const { user, access_token } = await authService.login(data);
+
+      console.log("data: ", user, access_token);
+      if (user && access_token) {
+        setAuth(user, access_token);
+        router.replace(redirectTo);
+      } else {
+        throw new Error("Login failed");
+      }
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        setError(error.response?.data.message);
+        return;
+      }
+      setError("Invalid Credentials, please try again");
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* OAuth Providers */}
       <div className="space-y-3">
         <Button
           type="button"
           variant="secondary"
           className="w-full flex items-center justify-center gap-3"
           onClick={handleGitHubLogin}
-          //   loading={loading}
         >
           <Github className="w-5 h-5" />
           Continue with GitHub
         </Button>
       </div>
 
-      {/* Divider */}
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
           <div className="w-full border-t border-gray-300" />
@@ -36,29 +77,42 @@ export default function LoginForm() {
         </div>
       </div>
 
-      {/* Email/Password Form */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-        }}
-        className="space-y-4"
-      >
-        <Input
-          label="Email"
-          type="email"
-          name="email"
-          placeholder="Enter your email"
-        />
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div>
+          <Input
+            label="Email"
+            type="email"
+            placeholder="Enter your email"
+            {...register("email")}
+          />
+          {errors.email && (
+            <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
+          )}
+        </div>
 
-        <Input
-          label="Password"
-          type="password"
-          name="password"
-          placeholder="Enter your password"
-        />
+        <div>
+          <Input
+            label="Password"
+            type="password"
+            placeholder="Enter your password"
+            {...register("password")}
+          />
+          {errors.password && (
+            <p className="text-red-500 text-sm mt-1">
+              {errors.password.message}
+            </p>
+          )}
+        </div>
 
-        <Button type="submit" variant="primary" className="w-full">
-          Sign In with Email
+        {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+
+        <Button
+          type="submit"
+          variant="primary"
+          className="w-full"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "Signing in..." : "Sign In with Email"}
         </Button>
       </form>
     </div>

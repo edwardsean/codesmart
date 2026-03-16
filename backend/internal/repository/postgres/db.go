@@ -10,7 +10,7 @@ import (
 
 func NewPostgresStorage() (*gorm.DB, error) {
 	dsn := fmt.Sprintf(
-		"host=%v user=%v password=%v dbname=%v port=%v sslmode=disable",
+		"host=%v user=%v password=%v dbname=%v port=%v sslmode=require",
 		config.Envs.DBHost,
 		config.Envs.DBUser,
 		config.Envs.DBPassword,

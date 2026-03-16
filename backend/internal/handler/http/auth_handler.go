@@ -165,7 +165,48 @@ func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	access_token, refresh_token, err := h.authService.Login(r.Context(), payload)
+	access_token, refresh_token, user, err := h.authService.Login(r.Context(), payload)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+
+	log.Printf("User: %v", user)
+
+	if access_token == "" || user == nil {
+		response.WriteError(w, errors.NewError("unable to get access_token and user", http.StatusInternalServerError))
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token", //the browser will store this as "refresh token"
+		Value:    refresh_token,   //the refresh token
+		Path:     "/",             //this means the cookie will be sent with all requests under /
+		HttpOnly: true,            //so that javascript (document.cookie) cannot access this cookie.
+		Secure:   false,           //for https
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   60 * 60 * 24 * 7, //7 days token expire
+	})
+
+	responseDTO := dto.AuthResponse{
+		AccessToken: access_token,
+		User:        user,
+	}
+
+	response.WriteJSON(w, http.StatusOK, responseDTO)
+
+}
+
+func (handler *AuthHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
+	//receive JSON payload
+	var payload dto.RegisterUserPayload
+
+	if err := response.ParseJson(r.Body, &payload); err != nil {
+		response.WriteError(w, errors.NewError(err.Error(), http.StatusBadRequest))
+		return
+	}
+
+	access_token, refresh_token, user, err := handler.authService.Register(r.Context(), payload)
 	if err != nil {
 		response.WriteError(w, err)
 		return
@@ -181,26 +222,12 @@ func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   60 * 60 * 24 * 7, //7 days token expire
 	})
 
-	response.WriteJSON(w, http.StatusOK, map[string]string{"access_token": access_token})
-
-}
-
-func (handler *AuthHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
-	//receive JSON payload
-	var payload dto.RegisterUserPayload
-
-	if err := response.ParseJson(r.Body, &payload); err != nil {
-		response.WriteError(w, errors.NewError(err.Error(), http.StatusBadRequest))
-		return
+	responseDTO := dto.AuthResponse{
+		AccessToken: access_token,
+		User:        user,
 	}
 
-	err := handler.authService.Register(r.Context(), payload)
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-
-	response.WriteJSON(w, http.StatusCreated, nil)
+	response.WriteJSON(w, http.StatusCreated, responseDTO)
 
 }
 

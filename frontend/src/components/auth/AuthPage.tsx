@@ -32,14 +32,14 @@ export default function AuthPage({
               {greetings[2]}{" "}
               {login ? (
                 <Link
-                  href="/signup"
+                  href="/auth/signup"
                   className="text-red-600 hover:text-red-700 font-medium transition-colors"
                 >
                   Sign up for free
                 </Link>
               ) : (
                 <Link
-                  href="/login"
+                  href="/auth/login"
                   className="text-red-600 hover:text-red-700 font-medium transition-colors"
                 >
                   Sign in here

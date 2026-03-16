@@ -2,17 +2,12 @@ import {  Repository } from '@/types/entity';
 import axios from 'axios';
 
 
-const isServer = typeof window === 'undefined';
-
 export default axios.create({
     baseURL: process.env.BASE_URL,
 });
 
 export const instance = axios.create({
-    // baseURL: process.env.NEXT_PUBLIC_GOLANG_API_URL,
-    baseURL: isServer 
-    ? process.env.DOCKER_PUBLIC_GOLANG_API_URL 
-    : process.env.NEXT_PUBLIC_GOLANG_API_URL,
+    baseURL: process.env.BASE_URL,
     withCredentials: true,
 })
 
