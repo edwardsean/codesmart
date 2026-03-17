@@ -19,27 +19,45 @@ body {
 }
 
 body {
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  color: #374151;
+  background: var(--bg);
+  color: var(--fg);
   line-height: 1.6;
+  font-family: "Inter", system-ui, sans-serif;
 }
 
-/* Custom CSS Variables - Gray & Red Theme */
-:root {
-  --primary-red: #dc2626;
-  --primary-red-hover: #b91c1c;
-  --primary-red-light: #fecaca;
+:root,
+.light {
+  --bg: #f5f3ee;
+  --bg-subtle: #eeebe5; /* for sidebars, cards */
+  --fg: #1a1916;
+  --fg-muted: rgba(26, 25, 22, 0.45);
+  --fg-faint: rgba(26, 25, 22, 0.2);
+  --border: rgba(0, 0, 0, 0.08);
+  --nav-bg: rgba(245, 243, 238, 0.85);
+  --card-bg: #f0ede8;
+  --card-hover: #ebe8e2;
+  --accent: #dc503c;
+  --btn-bg: #1a1916;
+  --btn-fg: #f5f3ee;
+  --active-bg: rgba(220, 80, 60, 0.08);
+  --active-fg: #dc503c;
+}
 
-  --gray-50: #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
-  --gray-600: #4b5563;
-  --gray-700: #374151;
-  --gray-800: #1f2937;
-  --gray-900: #111827;
+.dark {
+  --bg: #141414; /* was #0a0a0a, softer dark gray */
+  --bg-subtle: #1a1a1a; /* for sidebars, cards */
+  --fg: #e8e6e1;
+  --fg-muted: rgba(232, 230, 225, 0.4);
+  --fg-faint: rgba(232, 230, 225, 0.2);
+  --border: rgba(255, 255, 255, 0.07);
+  --nav-bg: rgba(20, 20, 20, 0.85);
+  --card-bg: #1a1a1a;
+  --card-hover: #202020;
+  --accent: #dc503c;
+  --btn-bg: #e8e6e1;
+  --btn-fg: #141414;
+  --active-bg: rgba(220, 80, 60, 0.1);
+  --active-fg: #dc503c;
 }
 
 /* Layout utilities */
@@ -58,7 +76,8 @@ body {
   .card {
     background: white;
     border-radius: 1rem;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1),
+    box-shadow:
+      0 10px 25px -5px rgba(0, 0, 0, 0.1),
       0 4px 6px -2px rgba(0, 0, 0, 0.05);
     border: 1px solid var(--gray-200);
     padding: 2rem;

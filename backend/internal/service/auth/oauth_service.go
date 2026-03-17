@@ -12,19 +12,24 @@ import (
 
 	"github.com/edwardsean/codesmart/backend/internal/config"
 	"github.com/edwardsean/codesmart/backend/internal/domain"
+	"github.com/edwardsean/codesmart/backend/internal/dto"
 	"github.com/edwardsean/codesmart/backend/internal/repository"
+	"github.com/edwardsean/codesmart/backend/internal/repository/redis"
 	"github.com/edwardsean/codesmart/backend/pkg/jwt"
 	"github.com/edwardsean/codesmart/backend/pkg/response"
+	"github.com/google/uuid"
 )
 
 type oauthService struct {
 	userRepo   repository.UserRepository
+	tokenRepo  repository.TokenRepository
 	httpClient *http.Client
 }
 
-func NewOAuthService(userRepo repository.UserRepository) *oauthService {
+func NewOAuthService(userRepo repository.UserRepository, tokenRepo repository.TokenRepository) *oauthService {
 	return &oauthService{
 		userRepo:   userRepo,
+		tokenRepo:  tokenRepo,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
@@ -114,7 +119,7 @@ func (s *oauthService) getGithubUser(ctx context.Context, accessToken string) (*
 	return &github_user, nil
 }
 
-func (s *oauthService) HandleGithubCallback(ctx context.Context, code string) (string, error) {
+func (s *oauthService) GithubCallback(ctx context.Context, code string) (string, error) {
 	// uri := config.Envs.GolangAPIURL + "/auth/github/callback"
 	// tokenResp, err := http.PostForm("https://github.com/login/oauth/access_token", url.Values{"client_id": {config.Envs.GithubClientID}, "client_secret": {config.Envs.GithubSecret}, "code": {code}, "redirect_uri": {uri}}) //returns a tokenResp.body
 
@@ -152,8 +157,9 @@ func (s *oauthService) HandleGithubCallback(ctx context.Context, code string) (s
 		}
 		github_user.Email = email
 	}
+
 	//get or create user for this github account
-	user, err := s.userRepo.GetOrCreateUserFromGithub(ctx, github_user.ID, github_user.Login, github_user.Email, ghAccessToken, github_user)
+	user, err := s.userRepo.GetOrCreateUserFromGithub(ctx, github_user.ID, github_user.Email, github_user.Login, ghAccessToken, github_user)
 
 	if err != nil {
 		// http.Redirect(w, r, "http://localhost:3000/login?error=user_db_fetching_failed_for_github, http.StatusFound)
@@ -174,7 +180,41 @@ func (s *oauthService) HandleGithubCallback(ctx context.Context, code string) (s
 		return "", err
 	}
 
-	return refresh_token, nil
+	access_token, err := jwt.CreateJWT(secret, user.ID, 15*time.Minute)
+	if err != nil {
+		// http.Redirect(w, r, "http://localhost:3000/login?error=refresh_token_creation_failure, http.StatusFound)
+		return "", err
+	}
+
+	oauthCode := uuid.New().String()
+	err = s.tokenRepo.StoreOAuthCode(ctx, oauthCode, &redis.OAuthCodeData{
+		AccessToken:  access_token,
+		RefreshToken: refresh_token,
+		User:         user,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return oauthCode, nil
+}
+
+func (s *oauthService) ExchangeOAuthCode(ctx context.Context, code string) (*dto.OAuthResultDTO, error) {
+	data, err := s.tokenRepo.ExchangeOAuthCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.OAuthResultDTO{
+		AccessToken:  data.AccessToken,
+		RefreshToken: data.RefreshToken,
+		User: dto.UserResponseDTO{
+			ID:       data.User.ID,
+			Email:    data.User.Email,
+			Username: data.User.Username,
+		},
+	}, nil
+
 }
 
 func (s *oauthService) getGithubEmail(ctx context.Context, access_token string) (string, error) {

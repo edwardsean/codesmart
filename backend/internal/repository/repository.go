@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/edwardsean/codesmart/backend/internal/domain"
+	"github.com/edwardsean/codesmart/backend/internal/repository/redis"
 )
 
 type UserRepository interface {
@@ -17,4 +18,6 @@ type UserRepository interface {
 type TokenRepository interface {
 	BlacklistToken(ctx context.Context, token string, ttl time.Duration) error
 	IsBlacklisted(ctx context.Context, token string) (bool, error)
+	StoreOAuthCode(ctx context.Context, code string, data *redis.OAuthCodeData) error
+	ExchangeOAuthCode(ctx context.Context, code string) (*redis.OAuthCodeData, error)
 }

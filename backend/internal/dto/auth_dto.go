@@ -13,7 +13,19 @@ type LoginUserPayload struct {
 	Password string `json:"password" validate:"required"`
 }
 
-type AuthResponse struct {
-	AccessToken string           `json:"access_token"`
-	User        *UserResponseDTO `json:"user"`
+type AuthResponseDTO struct {
+	AccessToken string          `json:"access_token"`
+	User        UserResponseDTO `json:"user"`
+}
+
+type AuthResultDTO struct {
+	AccessToken  string          `json:"access_token"`
+	RefreshToken string          `json:"refresh_token"`
+	User         UserResponseDTO `json:"user"`
+}
+
+type OAuthResultDTO struct {
+	AccessToken  string          `json:"access_token"`
+	RefreshToken string          `json:"refresh_token"`
+	User         UserResponseDTO `json:"user"`
 }

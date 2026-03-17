@@ -1,18 +1,21 @@
 "use client";
 
-import { useSearchParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import Input from "@/components/ui/Input";
+import { Github } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSchema, RegisterFormData } from "@/lib/schemas/authSchema";
-import { Github } from "lucide-react";
-import Button from "@/components/ui/Button";
-import Input from "@/components/ui/Input";
+import { useSearchParams, useRouter } from "next/navigation";
 import { authService } from "@/services/authService";
 import { useAuthStore } from "@/stores/authStore";
 import axios from "axios";
 
-export default function SignInForm() {
+export default function SignInForm({
+  styles,
+}: {
+  styles: Record<string, string>;
+}) {
   const {
     register,
     handleSubmit,
@@ -25,8 +28,7 @@ export default function SignInForm() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/";
   const { setAuth } = useAuthStore();
-
-  const [error, setError] = useState<string>("");
+  const [error, setError] = useState("");
 
   const handleGitHubLogin = () => {
     window.location.href = `${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/github/login`;
@@ -35,62 +37,47 @@ export default function SignInForm() {
   const onSubmit = async (data: RegisterFormData) => {
     try {
       const { user, access_token } = await authService.register(data);
-
       if (user && access_token) {
         setAuth(user, access_token);
-        router.replace(redirectTo); //may be push
-      } else {
-        throw new Error("Login failed");
+        router.replace(redirectTo);
       }
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.log("error: ", error.response);
-        setError(error.response?.data.message);
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data.message ?? "Registration failed");
         return;
       }
-      setError("Invalid Credentials, please try again");
+      setError("Something went wrong, please try again");
     }
   };
+
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        <Button
-          type="button"
-          variant="secondary"
-          className="w-full flex items-center justify-center gap-3"
-          onClick={handleGitHubLogin}
-          //   loading={loading}
-        >
-          <Github className="w-5 h-5" />
-          Continue with GitHub
-        </Button>
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <button
+        type="button"
+        className={styles.githubBtn}
+        onClick={handleGitHubLogin}
+      >
+        <Github size={16} />
+        Continue with GitHub
+      </button>
+
+      <div className={styles.divider}>
+        <span className={styles.dividerText}>or continue with email</span>
       </div>
 
-      {/* Divider */}
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-300" />
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-2 bg-white text-gray-500">
-            Or continue with email
-          </span>
-        </div>
-      </div>
-
-      {/* Email Signup Form */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+      >
         <div>
           <Input
             label="Username"
             type="text"
-            placeholder="Create a new username"
+            placeholder="Create a username"
             {...register("username")}
           />
           {errors.username && (
-            <p className="text-red-500 text-sm mt-1">
-              {errors.username.message}
-            </p>
+            <p className={styles.fieldError}>{errors.username.message}</p>
           )}
         </div>
 
@@ -102,7 +89,7 @@ export default function SignInForm() {
             {...register("email")}
           />
           {errors.email && (
-            <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
+            <p className={styles.fieldError}>{errors.email.message}</p>
           )}
         </div>
 
@@ -114,46 +101,42 @@ export default function SignInForm() {
             {...register("password")}
           />
           {errors.password && (
-            <p className="text-red-500 text-sm mt-1">
-              {errors.password.message}
-            </p>
+            <p className={styles.fieldError}>{errors.password.message}</p>
           )}
         </div>
 
         <div>
           <Input
-            label="Confirm Password"
+            label="Confirm password"
             type="password"
-            placeholder="Confirm password"
+            placeholder="Confirm your password"
             {...register("confirm_password")}
           />
           {errors.confirm_password && (
-            <p className="text-red-500 text-sm mt-1">
+            <p className={styles.fieldError}>
               {errors.confirm_password.message}
             </p>
           )}
         </div>
 
-        {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+        {error && <p className={styles.formError}>{error}</p>}
 
-        <Button
+        <button
           type="submit"
-          variant="primary"
-          className="w-full"
+          className={styles.submitBtn}
           disabled={isSubmitting}
         >
-          {isSubmitting ? "Creating Account..." : "Create Account"}
-        </Button>
+          {isSubmitting ? "Creating account..." : "Create account"}
+        </button>
       </form>
 
-      {/* Terms */}
-      <p className="text-xs text-gray-500 text-center">
-        By creating an account, you agree to our{" "}
-        <a href="#" className="text-red-600 hover:text-red-700">
+      <p className={styles.terms}>
+        By creating an account you agree to our{" "}
+        <a href="#" className={styles.termsLink}>
           Terms of Service
         </a>{" "}
         and{" "}
-        <a href="#" className="text-red-600 hover:text-red-700">
+        <a href="#" className={styles.termsLink}>
           Privacy Policy
         </a>
       </p>

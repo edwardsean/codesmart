@@ -44,7 +44,7 @@ func (s *APIServer) Run() error {
 	redisClient := redis.NewRedisClient(config.Envs.RedisAddr)
 	tokenRedisRepository := redis.NewTokenRepository(redisClient)
 
-	oAuthService := auth.NewOAuthService(userRepository)
+	oAuthService := auth.NewOAuthService(userRepository, tokenRedisRepository)
 	userService := user.NewUserService(userRepository)
 	authService := auth.NewAuthService(userRepository, tokenRedisRepository)
 	githubService := github.NewGithubService()

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { Github } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -12,7 +11,11 @@ import { authService } from "@/services/authService";
 import { useAuthStore } from "@/stores/authStore";
 import axios from "axios";
 
-export default function LoginForm() {
+export default function LoginForm({
+  styles,
+}: {
+  styles: Record<string, string>;
+}) {
   const {
     register,
     handleSubmit,
@@ -25,8 +28,7 @@ export default function LoginForm() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/";
   const { setAuth } = useAuthStore();
-
-  const [error, setError] = useState<string>("");
+  const [error, setError] = useState("");
 
   const handleGitHubLogin = () => {
     window.location.href = `${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/github/login`;
@@ -35,49 +37,38 @@ export default function LoginForm() {
   const onSubmit = async (data: LoginFormData) => {
     try {
       const { user, access_token } = await authService.login(data);
-
-      console.log("data: ", user, access_token);
       if (user && access_token) {
         setAuth(user, access_token);
         router.replace(redirectTo);
-      } else {
-        throw new Error("Login failed");
       }
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        setError(error.response?.data.message);
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data.message ?? "Login failed");
         return;
       }
-      setError("Invalid Credentials, please try again");
+      setError("Invalid credentials, please try again");
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        <Button
-          type="button"
-          variant="secondary"
-          className="w-full flex items-center justify-center gap-3"
-          onClick={handleGitHubLogin}
-        >
-          <Github className="w-5 h-5" />
-          Continue with GitHub
-        </Button>
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <button
+        type="button"
+        className={styles.githubBtn}
+        onClick={handleGitHubLogin}
+      >
+        <Github size={16} />
+        Continue with GitHub
+      </button>
+
+      <div className={styles.divider}>
+        <span className={styles.dividerText}>or continue with email</span>
       </div>
 
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-300" />
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-2 bg-white text-gray-500">
-            Or continue with email
-          </span>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+      >
         <div>
           <Input
             label="Email"
@@ -86,7 +77,7 @@ export default function LoginForm() {
             {...register("email")}
           />
           {errors.email && (
-            <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
+            <p className={styles.fieldError}>{errors.email.message}</p>
           )}
         </div>
 
@@ -98,22 +89,19 @@ export default function LoginForm() {
             {...register("password")}
           />
           {errors.password && (
-            <p className="text-red-500 text-sm mt-1">
-              {errors.password.message}
-            </p>
+            <p className={styles.fieldError}>{errors.password.message}</p>
           )}
         </div>
 
-        {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+        {error && <p className={styles.formError}>{error}</p>}
 
-        <Button
+        <button
           type="submit"
-          variant="primary"
-          className="w-full"
+          className={styles.submitBtn}
           disabled={isSubmitting}
         >
-          {isSubmitting ? "Signing in..." : "Sign In with Email"}
-        </Button>
+          {isSubmitting ? "Signing in..." : "Sign in"}
+        </button>
       </form>
     </div>
   );

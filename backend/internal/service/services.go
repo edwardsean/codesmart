@@ -16,12 +16,13 @@ type GithubService interface {
 }
 
 type OAuthService interface {
-	HandleGithubCallback(ctx context.Context, code string) (string, error)
+	GithubCallback(ctx context.Context, code string) (string, error)
+	ExchangeOAuthCode(ctx context.Context, code string) (*dto.OAuthResultDTO, error)
 }
 
 type AuthService interface {
-	Login(ctx context.Context, payload dto.LoginUserPayload) (string, string, *dto.UserResponseDTO, error)
-	Register(ctx context.Context, payload dto.RegisterUserPayload) (string, string, *dto.UserResponseDTO, error)
+	Login(ctx context.Context, payload dto.LoginUserPayload) (*dto.AuthResultDTO, error)
+	Register(ctx context.Context, payload dto.RegisterUserPayload) (*dto.AuthResultDTO, error)
 	Logout(ctx context.Context, refreshToken string) error
 	ValidateRefreshToken(ctx context.Context, refreshToken string) (*domain.User, error)
 	GetUserFromToken(ctx context.Context, token string) (*domain.User, error)

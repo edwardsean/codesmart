@@ -41,6 +41,8 @@ const useAxiosPrivate = () => {
       instance.interceptors.response.eject(responseInterceptor);
     };
   }, [token, refresh]); //everytime auth or refresh function changes, we need to re-setup the interceptors
+
+  return instance;
 };
 
 export default useAxiosPrivate;

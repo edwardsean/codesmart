@@ -50,6 +50,8 @@ func (h *AuthHandler) RegisterRoutes(router *mux.Router) {
 
 	authrouter.HandleFunc("/github/login", h.handleGithubLogin).Methods("GET")
 
+	authrouter.HandleFunc("/oauth/exchange", h.handleExhangeOAuthCode).Methods("GET")
+
 	authrouter.HandleFunc("/login", h.handleLogin).Methods("POST")
 
 	authrouter.HandleFunc("/register", h.handleRegister).Methods("POST")
@@ -67,16 +69,12 @@ func (h *AuthHandler) handleRefreshToken(w http.ResponseWriter, r *http.Request)
 	}
 
 	log.Printf("refresh token: %v", cookie.Value)
-
 	refreshToken := cookie.Value
 
 	//validate and get token claims
-	// user, err := auth.GetUserFromClaims(claims, store)
-	user, err := h.authService.GetUserFromToken(r.Context(), refreshToken)
+	user, err := h.authService.ValidateRefreshToken(r.Context(), refreshToken)
 	if err != nil {
-		log.Println(err)
 		response.WriteError(w, errors.NewError(err.Error(), http.StatusUnauthorized))
-		return
 	}
 
 	secret := []byte(config.Envs.JWTSecret)
@@ -115,6 +113,36 @@ func (h *AuthHandler) handleMe(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusOK, map[string]any{"user": safeUser})
 }
 
+func (h *AuthHandler) handleExhangeOAuthCode(w http.ResponseWriter, r *http.Request) {
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		response.WriteError(w, errors.NewError("Missing exchange code", http.StatusBadRequest))
+	}
+
+	data, err := h.oauthService.ExchangeOAuthCode(r.Context(), code)
+	if err != nil {
+		response.WriteError(w, errors.NewError(err.Error(), http.StatusUnauthorized))
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    data.RefreshToken,
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/",
+		MaxAge:   7 * 24 * 60 * 60,
+	})
+
+	responseDTO := dto.AuthResponseDTO{
+		AccessToken: data.AccessToken,
+		User:        data.User,
+	}
+
+	response.WriteJSON(w, http.StatusOK, responseDTO)
+
+}
+
 func (h *AuthHandler) handleGithubCallback(w http.ResponseWriter, r *http.Request) {
 	//get code from github
 	code := r.URL.Query().Get("code")
@@ -125,26 +153,25 @@ func (h *AuthHandler) handleGithubCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	refresh_token, err := h.oauthService.HandleGithubCallback(r.Context(), code)
+	oauthCode, err := h.oauthService.GithubCallback(r.Context(), code)
 	if err != nil {
 		//ERROR HANDLING
 		log.Printf("error in github callback: %v", err)
+		http.Redirect(w, r, config.Envs.FrontendOrigin+"/auth/login?error=oauth_failed", http.StatusFound)
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    refresh_token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   60 * 60 * 24 * 7,
-	})
+	// http.SetCookie(w, &http.Cookie{
+	// 	Name:     "refresh_token",
+	// 	Value:    refresh_token,
+	// 	Path:     "/",
+	// 	HttpOnly: true,
+	// 	Secure:   false,
+	// 	SameSite: http.SameSiteStrictMode,
+	// 	MaxAge:   60 * 60 * 24 * 7,
+	// })
 
-	log.Println("refresh token: ", refresh_token)
-
-	http.Redirect(w, r, "http://localhost/dashboard", http.StatusFound)
+	http.Redirect(w, r, config.Envs.FrontendOrigin+"/auth/oauth/callback?code="+oauthCode, http.StatusFound)
 
 }
 
@@ -165,32 +192,32 @@ func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	access_token, refresh_token, user, err := h.authService.Login(r.Context(), payload)
+	data, err := h.authService.Login(r.Context(), payload)
 	if err != nil {
 		response.WriteError(w, err)
 		return
 	}
 
-	log.Printf("User: %v", user)
+	log.Printf("User: %v", data.User)
 
-	if access_token == "" || user == nil {
-		response.WriteError(w, errors.NewError("unable to get access_token and user", http.StatusInternalServerError))
+	if data.AccessToken == "" || data.RefreshToken == "" {
+		response.WriteError(w, errors.NewError("unable to get tokens", http.StatusInternalServerError))
 		return
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token", //the browser will store this as "refresh token"
-		Value:    refresh_token,   //the refresh token
-		Path:     "/",             //this means the cookie will be sent with all requests under /
-		HttpOnly: true,            //so that javascript (document.cookie) cannot access this cookie.
-		Secure:   false,           //for https
+		Name:     "refresh_token",   //the browser will store this as "refresh token"
+		Value:    data.RefreshToken, //the refresh token
+		Path:     "/",               //this means the cookie will be sent with all requests under /
+		HttpOnly: true,              //so that javascript (document.cookie) cannot access this cookie.
+		Secure:   false,             //for https
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   60 * 60 * 24 * 7, //7 days token expire
 	})
 
-	responseDTO := dto.AuthResponse{
-		AccessToken: access_token,
-		User:        user,
+	responseDTO := dto.AuthResponseDTO{
+		AccessToken: data.AccessToken,
+		User:        data.User,
 	}
 
 	response.WriteJSON(w, http.StatusOK, responseDTO)
@@ -206,25 +233,30 @@ func (handler *AuthHandler) handleRegister(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	access_token, refresh_token, user, err := handler.authService.Register(r.Context(), payload)
+	data, err := handler.authService.Register(r.Context(), payload)
 	if err != nil {
 		response.WriteError(w, err)
 		return
 	}
 
+	if data.AccessToken == "" || data.RefreshToken == "" {
+		response.WriteError(w, errors.NewError("unable to get tokens", http.StatusInternalServerError))
+		return
+	}
+
 	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token", //the browser will store this as "refresh token"
-		Value:    refresh_token,   //the refresh token
-		Path:     "/",             //this means the cookie will be sent with all requests under /
-		HttpOnly: true,            //so that javascript (document.cookie) cannot access this cookie.
-		Secure:   false,           //for https
+		Name:     "refresh_token",   //the browser will store this as "refresh token"
+		Value:    data.RefreshToken, //the refresh token
+		Path:     "/",               //this means the cookie will be sent with all requests under /
+		HttpOnly: true,              //so that javascript (document.cookie) cannot access this cookie.
+		Secure:   false,             //for https
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   60 * 60 * 24 * 7, //7 days token expire
 	})
 
-	responseDTO := dto.AuthResponse{
-		AccessToken: access_token,
-		User:        user,
+	responseDTO := dto.AuthResponseDTO{
+		AccessToken: data.AccessToken,
+		User:        data.User,
 	}
 
 	response.WriteJSON(w, http.StatusCreated, responseDTO)

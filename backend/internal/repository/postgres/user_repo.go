@@ -60,7 +60,7 @@ func (s *PostgreUserStore) CreateUser(ctx context.Context, user *domain.User) er
 	return nil
 }
 
-func (s *PostgreUserStore) GetOrCreateUserFromGithub(ctx context.Context, id int, username string, email string, access_token string, github_user *domain.GithubUser) (*domain.User, error) {
+func (s *PostgreUserStore) GetOrCreateUserFromGithub(ctx context.Context, id int, email string, username string, access_token string, github_user *domain.GithubUser) (*domain.User, error) {
 	//hash access token to store to database
 	encryption_key64 := config.Envs.EncryptionKey
 	secretKey, err := base64.StdEncoding.DecodeString(encryption_key64)

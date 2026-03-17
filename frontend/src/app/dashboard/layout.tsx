@@ -1,17 +1,18 @@
+import Header from "@/components/ui/Header";
 import SideNav from "@/components/dashboard/SideNav";
-import Header from "@/components/dashboard/Header";
+import styles from "./dashboard.module.css";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      <div className="flex">
+    <div className={styles.root}>
+      <Header showAuth />
+      <div className={styles.body}>
         <SideNav />
-        <div className="flex-1">{children}</div>
+        <main className={styles.main}>{children}</main>
       </div>
     </div>
   );
