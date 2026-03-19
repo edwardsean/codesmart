@@ -2,12 +2,9 @@ package postgres
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 
-	"github.com/edwardsean/codesmart/backend/internal/config"
 	"github.com/edwardsean/codesmart/backend/internal/domain"
-	"github.com/edwardsean/codesmart/backend/pkg/password"
 	"gorm.io/gorm"
 )
 
@@ -50,55 +47,68 @@ func (s *PostgreUserStore) GetUserByID(ctx context.Context, id int) (*domain.Use
 
 }
 
-func (s *PostgreUserStore) CreateUser(ctx context.Context, user *domain.User) error {
+func (s *PostgreUserStore) CreateUser(ctx context.Context, user *domain.User) (*domain.User, error) {
 	result := s.db.WithContext(ctx).Create(user) //dont use &pointer since that would be a pointer to a pointer **domain.User
 
 	if result.Error != nil {
-		return result.Error
+		return nil, result.Error
 	}
 
-	return nil
+	return user, nil
 }
 
-func (s *PostgreUserStore) GetOrCreateUserFromGithub(ctx context.Context, id int, email string, username string, access_token string, github_user *domain.GithubUser) (*domain.User, error) {
+func (s *PostgreUserStore) GetOrCreateUserFromGithub(ctx context.Context, id int, email string, username string, hashed_token string, github_user *domain.GithubUser) (*domain.User, error) {
 	//hash access token to store to database
-	encryption_key64 := config.Envs.EncryptionKey
-	secretKey, err := base64.StdEncoding.DecodeString(encryption_key64)
-
-	if err != nil {
-		return nil, err
-	}
-
-	hashed_token, err := password.Encrypt(access_token, secretKey)
-
-	if err != nil {
-		return nil, err
-	}
 
 	var user domain.User
+
+	err := s.db.WithContext(ctx).
+		Raw("SELECT * FROM users WHERE github_id = ?", id).
+		First(&user).Error
+
+	if err == nil {
+		//found by github_id, then update token and return
+		user.GithubToken = hashed_token
+		s.db.WithContext(ctx).Save(&user)
+		return &user, nil
+	}
+
+	//fall back to email, user may have registered with email before
 	err = s.db.WithContext(ctx).Raw("SELECT * FROM users WHERE email = ?", email).First(&user).Error
+
+	if err == nil {
+		//found by email, thenlink their GitHub account now
+		user.GitHubID = id
+		user.GithubToken = hashed_token
+		s.db.WithContext(ctx).Save(&user)
+		return &user, nil
+	}
 
 	//if doesnt exist
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		new_user := domain.User{Username: username, Email: email, Password: "", GitHubID: id, GithubToken: hashed_token}
 		result := s.db.WithContext(ctx).Create(&new_user)
-
 		if result.Error != nil {
 			return nil, result.Error
 		}
 
 		return &new_user, nil
-	} else if err != nil {
-		return nil, err
 	}
 
-	//if exists
-	if user.GithubToken != hashed_token {
-		user.GithubToken = hashed_token
-		if err := s.db.WithContext(ctx).Save(&user).Error; err != nil {
-			return nil, err
-		}
-	}
-	return &user, nil
+	return nil, err
 
+}
+
+func (s *PostgreUserStore) LinkGithub(ctx context.Context, userID int, githubID int, githubToken string) error {
+	return s.db.WithContext(ctx).
+		Model(&domain.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]any{
+			"github_id":    githubID,
+			"github_token": githubToken,
+		}).Error
+}
+
+func (s *PostgreUserStore) DeleteUser(ctx context.Context, id int) error {
+	return s.db.WithContext(ctx).Delete(&domain.User{}, id).Error
 }

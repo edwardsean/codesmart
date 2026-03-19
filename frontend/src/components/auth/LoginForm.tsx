@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Input from "@/components/ui/Input";
-import { Github } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema, LoginFormData } from "@/lib/schemas/authSchema";
@@ -10,12 +9,10 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { authService } from "@/services/authService";
 import { useAuthStore } from "@/stores/authStore";
 import axios from "axios";
+import axiosInstance from "@/lib/api";
+import api from "@/lib/api";
 
-export default function LoginForm({
-  styles,
-}: {
-  styles: Record<string, string>;
-}) {
+export default function LoginForm() {
   const {
     register,
     handleSubmit,
@@ -26,17 +23,14 @@ export default function LoginForm({
 
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/";
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
   const { setAuth } = useAuthStore();
   const [error, setError] = useState("");
-
-  const handleGitHubLogin = () => {
-    window.location.href = `${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/github/login`;
-  };
+  const apiAuth = authService(axiosInstance);
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      const { user, access_token } = await authService.login(data);
+      const { user, access_token } = await apiAuth.login(data);
       if (user && access_token) {
         setAuth(user, access_token);
         router.replace(redirectTo);
@@ -51,58 +45,38 @@ export default function LoginForm({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3">
+      <Input
+        label="Email"
+        type="email"
+        placeholder="Enter your email"
+        error={errors.email?.message}
+        {...register("email")}
+      />
+
+      <Input
+        label="Password"
+        type="password"
+        placeholder="Enter your password"
+        error={errors.password?.message}
+        {...register("password")}
+      />
+
+      {error && (
+        <p className="text-xs text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+          {error}
+        </p>
+      )}
+
       <button
-        type="button"
-        className={styles.githubBtn}
-        onClick={handleGitHubLogin}
+        type="submit"
+        disabled={isSubmitting}
+        className="w-full py-2.5 px-4 rounded-lg text-sm font-medium transition-opacity
+          bg-gray-900 dark:bg-zinc-100 text-white dark:text-zinc-900
+          hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed mt-1"
       >
-        <Github size={16} />
-        Continue with GitHub
+        {isSubmitting ? "Signing in..." : "Sign in"}
       </button>
-
-      <div className={styles.divider}>
-        <span className={styles.dividerText}>or continue with email</span>
-      </div>
-
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        style={{ display: "flex", flexDirection: "column", gap: "12px" }}
-      >
-        <div>
-          <Input
-            label="Email"
-            type="email"
-            placeholder="Enter your email"
-            {...register("email")}
-          />
-          {errors.email && (
-            <p className={styles.fieldError}>{errors.email.message}</p>
-          )}
-        </div>
-
-        <div>
-          <Input
-            label="Password"
-            type="password"
-            placeholder="Enter your password"
-            {...register("password")}
-          />
-          {errors.password && (
-            <p className={styles.fieldError}>{errors.password.message}</p>
-          )}
-        </div>
-
-        {error && <p className={styles.formError}>{error}</p>}
-
-        <button
-          type="submit"
-          className={styles.submitBtn}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Signing in..." : "Sign in"}
-        </button>
-      </form>
-    </div>
+    </form>
   );
 }

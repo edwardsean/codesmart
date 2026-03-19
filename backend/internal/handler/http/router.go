@@ -10,6 +10,7 @@ import (
 	"github.com/edwardsean/codesmart/backend/internal/repository/redis"
 	"github.com/edwardsean/codesmart/backend/internal/service/auth"
 	"github.com/edwardsean/codesmart/backend/internal/service/github"
+	"github.com/edwardsean/codesmart/backend/internal/service/project"
 	"github.com/edwardsean/codesmart/backend/internal/service/user"
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
@@ -43,18 +44,21 @@ func (s *APIServer) Run() error {
 	userRepository := postgres.PostgreNewUserStore(s.db) //a new store instance using gormDB, if want to use Redis make another store, the NewStore should then be name PostgreNewStore
 	redisClient := redis.NewRedisClient(config.Envs.RedisAddr)
 	tokenRedisRepository := redis.NewTokenRepository(redisClient)
+	projectRepository := postgres.NewPostgresProjectStore(s.db)
 
 	oAuthService := auth.NewOAuthService(userRepository, tokenRedisRepository)
 	userService := user.NewUserService(userRepository)
 	authService := auth.NewAuthService(userRepository, tokenRedisRepository)
 	githubService := github.NewGithubService()
-	authHandler := NewAuthHandler(userService, oAuthService, authService) //passess it to the handler where you can call the handler methods like login and register
+	projectService := project.NewProjectService(projectRepository)
 
-	// repositoryStore := repository.PostgreNewStore(s.db)
+	authHandler := NewAuthHandler(userService, oAuthService, authService) //passess it to the handler where you can call the handler methods like login and register
 	githubHandler := NewGithubHandler(githubService, authService)
+	projectHandler := NewProjectHandler(projectService)
 
 	githubHandler.RegisterRoutes(subrouter)
 	authHandler.RegisterRoutes(subrouter)
+	projectHandler.RegisterRoutes(subrouter, authService) //auth service for middleware
 	log.Println("Listening on", s.addr)
 
 	return http.ListenAndServe(s.addr, router) //starts the HTTP server on s.addr and uses the router to handle requests.

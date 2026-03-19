@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -16,7 +17,8 @@ import (
 	"github.com/edwardsean/codesmart/backend/internal/repository"
 	"github.com/edwardsean/codesmart/backend/internal/repository/redis"
 	"github.com/edwardsean/codesmart/backend/pkg/jwt"
-	"github.com/edwardsean/codesmart/backend/pkg/response"
+	"github.com/edwardsean/codesmart/backend/pkg/password"
+	"github.com/edwardsean/codesmart/backend/pkg/utils"
 	"github.com/google/uuid"
 )
 
@@ -110,7 +112,7 @@ func (s *oauthService) getGithubUser(ctx context.Context, accessToken string) (*
 
 	var github_user domain.GithubUser
 
-	if err := response.ParseJson(resp.Body, &github_user); err != nil {
+	if err := utils.ParseJson(resp.Body, &github_user); err != nil {
 		//ERROR HANDLING
 		// http.Redirect(w, r, "http://localhost:3000/login?error=decode_failed", http.StatusFound)
 		return nil, err
@@ -158,8 +160,15 @@ func (s *oauthService) GithubCallback(ctx context.Context, code string) (string,
 		github_user.Email = email
 	}
 
+	secretKey, _ := base64.StdEncoding.DecodeString(config.Envs.EncryptionKey)
+	hashed_token, err := password.Encrypt(ghAccessToken, secretKey)
+
+	if err != nil {
+		return "", err
+	}
+
 	//get or create user for this github account
-	user, err := s.userRepo.GetOrCreateUserFromGithub(ctx, github_user.ID, github_user.Email, github_user.Login, ghAccessToken, github_user)
+	user, err := s.userRepo.GetOrCreateUserFromGithub(ctx, github_user.ID, github_user.Email, github_user.Login, hashed_token, github_user)
 
 	if err != nil {
 		// http.Redirect(w, r, "http://localhost:3000/login?error=user_db_fetching_failed_for_github, http.StatusFound)
@@ -217,6 +226,35 @@ func (s *oauthService) ExchangeOAuthCode(ctx context.Context, code string) (*dto
 
 }
 
+// service/auth/oauth_service.go
+func (s *oauthService) ConnectGithub(ctx context.Context, userID int, code string) error {
+	ghAccessToken, err := s.exchangeCodeForToken(ctx, code)
+	if err != nil {
+		return err
+	}
+
+	githubUser, err := s.getGithubUser(ctx, ghAccessToken)
+	if err != nil {
+		return err
+	}
+
+	if githubUser.Email == "" {
+		githubUser.Email, err = s.getGithubEmail(ctx, ghAccessToken)
+		if err != nil {
+			return err
+		}
+	}
+
+	encryptionKey, _ := base64.StdEncoding.DecodeString(config.Envs.EncryptionKey)
+	hashedToken, err := password.Encrypt(ghAccessToken, encryptionKey)
+	if err != nil {
+		return err
+	}
+
+	// link github to the existing user — don't create a new user
+	return s.userRepo.LinkGithub(ctx, userID, githubUser.ID, hashedToken)
+}
+
 func (s *oauthService) getGithubEmail(ctx context.Context, access_token string) (string, error) {
 	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/user/emails", nil)
 	request.Header.Set("Authorization", "token "+access_token)
@@ -235,7 +273,7 @@ func (s *oauthService) getGithubEmail(ctx context.Context, access_token string) 
 		Visibility string `json:"visibility"`
 	}
 
-	if err := response.ParseJson(resp.Body, &emails); err != nil {
+	if err := utils.ParseJson(resp.Body, &emails); err != nil {
 		return "", err
 	}
 

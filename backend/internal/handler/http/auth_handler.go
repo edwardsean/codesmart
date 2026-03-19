@@ -4,14 +4,16 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/edwardsean/codesmart/backend/internal/config"
-	"github.com/edwardsean/codesmart/backend/internal/domain"
 	"github.com/edwardsean/codesmart/backend/internal/dto"
 	"github.com/edwardsean/codesmart/backend/internal/handler/http/middleware"
 	"github.com/edwardsean/codesmart/backend/internal/service"
 	"github.com/edwardsean/codesmart/backend/pkg/jwt"
+	"github.com/edwardsean/codesmart/backend/pkg/sanitize"
+	"github.com/edwardsean/codesmart/backend/pkg/utils"
 
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
 	"github.com/edwardsean/codesmart/backend/pkg/response"
@@ -32,12 +34,6 @@ func NewAuthHandler(userService service.UserService, oauthService service.OAuthS
 
 func (h *AuthHandler) RegisterRoutes(router *mux.Router) {
 	authrouter := router.PathPrefix("/auth").Subrouter()
-	// auth.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
-	// 	fmt.Println("handler", r.Header)
-	// 	w.WriteHeader(http.StatusOK)
-	// 	w.Write([]byte("OK"))
-	// })
-	// authMiddleware := middleware.WithJWTAuth(handler.store)
 
 	authMiddleware := middleware.WithJWTAuth(h.authService)
 
@@ -49,6 +45,8 @@ func (h *AuthHandler) RegisterRoutes(router *mux.Router) {
 	authrouter.HandleFunc("/github/callback", h.handleGithubCallback).Methods("GET")
 
 	authrouter.HandleFunc("/github/login", h.handleGithubLogin).Methods("GET")
+
+	authrouter.HandleFunc("/github/connect", h.handleGithubConnect).Methods("GET")
 
 	authrouter.HandleFunc("/oauth/exchange", h.handleExhangeOAuthCode).Methods("GET")
 
@@ -102,11 +100,10 @@ func (h *AuthHandler) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//to make sure it is safe to send to the front end
-	safeUser := domain.SafeUser{
+	safeUser := dto.UserResponseDTO{
 		ID:        user.ID,
 		Email:     user.Email,
 		Username:  user.Username,
-		GitHubID:  user.GitHubID,
 		CreatedAt: user.CreatedAt,
 	}
 
@@ -118,6 +115,8 @@ func (h *AuthHandler) handleExhangeOAuthCode(w http.ResponseWriter, r *http.Requ
 	if code == "" {
 		response.WriteError(w, errors.NewError("Missing exchange code", http.StatusBadRequest))
 	}
+
+	code = sanitize.SanitizeString(code)
 
 	data, err := h.oauthService.ExchangeOAuthCode(r.Context(), code)
 	if err != nil {
@@ -148,11 +147,37 @@ func (h *AuthHandler) handleGithubCallback(w http.ResponseWriter, r *http.Reques
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		//ERROR HANDLING
-		// http.Redirect(w, r, "http://localhost:3000/login?error=missing_code", http.StatusFound)
 		log.Println("code is not found from github")
+		http.Redirect(w, r, config.Envs.FrontendOrigin+"/auth/login?error=missing_code", http.StatusFound)
+		return
+	}
+	state := r.URL.Query().Get("state")
+
+	code = sanitize.SanitizeString(code)
+	state = sanitize.SanitizeString(state)
+
+	//for connect
+	if strings.HasPrefix(state, "connect:") { //means that a user has logged in and wants to connect github
+		user, err := middleware.GetUserFromContext(r)
+		if err != nil {
+			http.Redirect(w, r, config.Envs.FrontendOrigin+"/auth/login?error=unauthorized", http.StatusFound)
+			return
+		}
+
+		redirect, _ := url.QueryUnescape(strings.TrimPrefix(state, "connect:"))
+
+		//link github to existing account
+		err = h.oauthService.ConnectGithub(r.Context(), user.ID, code)
+		if err != nil {
+			http.Redirect(w, r, config.Envs.FrontendOrigin+redirect+"?error=connect_failed", http.StatusFound)
+			return
+		}
+
+		http.Redirect(w, r, config.Envs.FrontendOrigin+redirect+"?connected=true", http.StatusFound)
 		return
 	}
 
+	//for login
 	oauthCode, err := h.oauthService.GithubCallback(r.Context(), code)
 	if err != nil {
 		//ERROR HANDLING
@@ -176,10 +201,42 @@ func (h *AuthHandler) handleGithubCallback(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *AuthHandler) handleGithubLogin(w http.ResponseWriter, r *http.Request) {
+
 	uri := config.Envs.FrontendOrigin + "/api/auth/github/callback"
-	redirect := url.QueryEscape(uri)
+
+	if !strings.HasPrefix(uri, config.Envs.FrontendOrigin) {
+		response.WriteError(w, errors.NewError("Invalid redirect URI", http.StatusInternalServerError))
+		return
+	}
+
+	redirectEncoded := url.QueryEscape(uri)
 	URL := "https://github.com/login/oauth/authorize?client_id=" + config.Envs.GithubClientID +
-		"&redirect_uri=" + redirect + "&scope=repo,user:email"
+		"&redirect_uri=" + redirectEncoded + "&scope=repo,user:email" +
+		"&scope=repo,user:email"
+
+	http.Redirect(w, r, URL, http.StatusFound)
+}
+
+func (h *AuthHandler) handleGithubConnect(w http.ResponseWriter, r *http.Request) {
+	redirect := r.URL.Query().Get("redirect")
+	if redirect == "" {
+		redirect = "/dashboard"
+	}
+
+	uri := config.Envs.FrontendOrigin + "/api/auth/github/callback"
+
+	state := "connect:" + url.QueryEscape(redirect)
+
+	if !strings.HasPrefix(uri, config.Envs.FrontendOrigin) {
+		response.WriteError(w, errors.NewError("Invalid redirect URI", http.StatusInternalServerError))
+		return
+	}
+
+	redirectEncoded := url.QueryEscape(uri)
+	URL := "https://github.com/login/oauth/authorize?client_id=" + config.Envs.GithubClientID +
+		"&redirect_uri=" + redirectEncoded + "&scope=repo,user:email" +
+		"&scope=repo,user:email" +
+		"&state=" + url.QueryEscape(state)
 
 	http.Redirect(w, r, URL, http.StatusFound)
 }
@@ -187,10 +244,12 @@ func (h *AuthHandler) handleGithubLogin(w http.ResponseWriter, r *http.Request) 
 func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var payload dto.LoginUserPayload
 
-	if err := response.ParseJson(r.Body, &payload); err != nil {
+	if err := utils.ParseJson(r.Body, &payload); err != nil {
 		response.WriteError(w, errors.NewError(err.Error(), http.StatusBadRequest))
 		return
 	}
+
+	payload.Email = sanitize.SanitizeString(payload.Email)
 
 	data, err := h.authService.Login(r.Context(), payload)
 	if err != nil {
@@ -228,10 +287,14 @@ func (handler *AuthHandler) handleRegister(w http.ResponseWriter, r *http.Reques
 	//receive JSON payload
 	var payload dto.RegisterUserPayload
 
-	if err := response.ParseJson(r.Body, &payload); err != nil {
+	if err := utils.ParseJson(r.Body, &payload); err != nil {
 		response.WriteError(w, errors.NewError(err.Error(), http.StatusBadRequest))
 		return
 	}
+
+	//sanitize, but not for password as it can delete characters
+	payload.Username = sanitize.SanitizeString(payload.Username)
+	payload.Email = sanitize.SanitizeString(payload.Email)
 
 	data, err := handler.authService.Register(r.Context(), payload)
 	if err != nil {

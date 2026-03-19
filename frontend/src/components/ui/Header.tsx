@@ -7,18 +7,18 @@ import axios from "axios";
 import { useAuthStore } from "@/stores/authStore";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import { useState } from "react";
-import styles from "./Header.module.css";
+import { Skeleton } from "@/components/ui/Skeleton";
 
-interface AppHeaderProps {
-  showAuth?: boolean; //true = show logout (dashboard)
-  showNav?: boolean; //true = show sign in / get started (home)
+interface HeaderProps {
+  showAuth?: boolean;
+  showNav?: boolean;
 }
 
 export default function Header({
   showAuth = false,
   showNav = false,
-}: AppHeaderProps) {
-  const { logout, account } = useAuthStore();
+}: HeaderProps) {
+  const { logout, account, _hasHydrated } = useAuthStore();
   const api = useAxiosPrivate();
   const [isLoggingOut, setLoggingOut] = useState(false);
 
@@ -37,9 +37,13 @@ export default function Header({
   }
 
   return (
-    <nav className={styles.nav}>
-      <Link href="/" className={styles.logo}>
-        <div className={styles.logoIcon}>
+    <nav className="fixed top-0 left-0 right-0 z-50 h-[65px] px-12 flex items-center justify-between border-b border-black/[0.06] dark:border-white/[0.06] bg-white/85 dark:bg-[#141414]/85 backdrop-blur-md">
+      {/* Logo */}
+      <Link
+        href="/"
+        className="flex items-center gap-2.5 font-mono text-sm font-medium text-gray-900 dark:text-zinc-100 no-underline tracking-tight"
+      >
+        <div className="w-7 h-7 rounded-md border border-[#dc503c]/70 flex items-center justify-center flex-shrink-0">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path
               d="M2 4.5L5.5 7L2 9.5"
@@ -59,31 +63,42 @@ export default function Header({
         codesmart
       </Link>
 
-      <div className={styles.navLinks}>
+      {/* Right side */}
+      <div className="flex items-center gap-2">
         <ThemeToggle />
 
-        {/* home page — not logged in */}
         {showNav && (
           <>
-            <Link href="/auth/login" className={styles.link}>
+            <Link
+              href="/auth/login"
+              className="text-sm text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100 px-3 py-1.5 rounded-lg transition-colors"
+            >
               Sign in
             </Link>
-            <Link href="/auth/signup" className={styles.btn}>
+            <Link
+              href="/auth/signup"
+              className="text-sm font-medium px-4 py-1.5 rounded-lg transition-opacity bg-gray-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-85"
+            >
               Get started
             </Link>
           </>
         )}
 
-        {/* dashboard — logged in */}
         {showAuth && (
           <>
-            <span className={styles.username}>{account?.user.username}</span>
+            {_hasHydrated ? (
+              <span className="text-sm font-mono text-gray-400 dark:text-zinc-500">
+                {account?.user.username}
+              </span>
+            ) : (
+              <Skeleton className="h-4 w-20" />
+            )}
             <button
-              className={styles.logoutBtn}
               onClick={handleLogout}
               disabled={isLoggingOut}
+              className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-zinc-400 border border-black/[0.08] dark:border-white/[0.07] px-3 py-1.5 rounded-lg hover:text-gray-900 dark:hover:text-zinc-100 hover:border-black/20 dark:hover:border-white/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <LogOut size={14} />
+              <LogOut size={13} />
               {isLoggingOut ? "Signing out..." : "Sign out"}
             </button>
           </>

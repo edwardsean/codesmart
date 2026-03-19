@@ -56,7 +56,7 @@ func (s *AuthService) Login(ctx context.Context, payload dto.LoginUserPayload) (
 		return nil, errors.ErrTokenGeneration
 	}
 
-	userResponse := s.ChangeToUserResponseDTO(user)
+	userResponse := dto.ToUserResponseDTO(user)
 
 	return &dto.AuthResultDTO{
 		AccessToken:  access_token,
@@ -91,7 +91,7 @@ func (s *AuthService) Register(ctx context.Context, payload dto.RegisterUserPayl
 		return nil, errors.NewError(err.Error(), http.StatusInternalServerError)
 	}
 
-	err = s.userRepo.CreateUser(ctx, &domain.User{
+	user, err = s.userRepo.CreateUser(ctx, &domain.User{
 		Email:    payload.Email,
 		Username: payload.Username,
 		Password: hash_password,
@@ -113,7 +113,7 @@ func (s *AuthService) Register(ctx context.Context, payload dto.RegisterUserPayl
 		return nil, errors.ErrTokenGeneration
 	}
 
-	userResponse := s.ChangeToUserResponseDTO(user)
+	userResponse := dto.ToUserResponseDTO(user)
 
 	return &dto.AuthResultDTO{
 		AccessToken:  access_token,
@@ -161,13 +161,4 @@ func (s *AuthService) GetUserFromToken(ctx context.Context, token string) (*doma
 	}
 
 	return s.userRepo.GetUserByID(ctx, userID)
-}
-
-func (s *AuthService) ChangeToUserResponseDTO(user *domain.User) dto.UserResponseDTO {
-	return dto.UserResponseDTO{
-		ID:        user.ID,
-		Email:     user.Email,
-		Username:  user.Username,
-		CreatedAt: user.CreatedAt,
-	}
 }

@@ -17,7 +17,7 @@ const useRefreshToken = () => {
     refreshState.isRefreshing = true;
 
     try {
-      const response = await axiosInstance.get("/auth/refresh", {
+      const response = await axiosInstance.post("/api/auth/refresh", {
         withCredentials: true,
       });
 
@@ -33,7 +33,7 @@ const useRefreshToken = () => {
 
       try {
         await axiosInstance.post(
-          "/auth/logout",
+          "/api/auth/logout",
           {},
           {
             withCredentials: true,

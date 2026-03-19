@@ -6,7 +6,13 @@ import axios from "@/lib/api";
 import { useAuthStore } from "@/stores/authStore";
 import LoadingScreen from "@/components/ui/Loading";
 
-export default function OAuthCallbackContent({ code }: { code?: string }) {
+export default function OAuthCallbackContent({
+  code,
+  redirect,
+}: {
+  code?: string;
+  redirect?: string;
+}) {
   const { setAuth } = useAuthStore();
   const router = useRouter();
 
@@ -27,7 +33,7 @@ export default function OAuthCallbackContent({ code }: { code?: string }) {
         );
         console.log("data in callback frontend: ", data);
         setAuth(data.user, data.access_token);
-        router.replace("/dashboard"); //replace so user cant go back to /oauth.callback not router.push
+        router.replace(redirect ?? "/dashboard"); //replace so user cant go back to /oauth.callback not router.push
       } catch {
         router.replace("/auth/login");
       }

@@ -18,6 +18,7 @@ type GithubService interface {
 type OAuthService interface {
 	GithubCallback(ctx context.Context, code string) (string, error)
 	ExchangeOAuthCode(ctx context.Context, code string) (*dto.OAuthResultDTO, error)
+	ConnectGithub(ctx context.Context, userId int, code string) error
 }
 
 type AuthService interface {
@@ -26,4 +27,11 @@ type AuthService interface {
 	Logout(ctx context.Context, refreshToken string) error
 	ValidateRefreshToken(ctx context.Context, refreshToken string) (*domain.User, error)
 	GetUserFromToken(ctx context.Context, token string) (*domain.User, error)
+}
+
+type ProjectService interface {
+	GetProjects(ctx context.Context, userId int) ([]dto.ProjectListItemDTO, error)
+	CreateProject(ctx context.Context, userId int, payload dto.CreateProjectPayload) (*dto.ProjectResponseDTO, error)
+	GetProjectByID(ctx context.Context, projectId int, userId int) (*dto.ProjectResponseDTO, error)
+	DeleteProject(ctx context.Context, projectId int, userId int) error
 }

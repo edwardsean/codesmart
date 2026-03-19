@@ -12,7 +12,7 @@ import (
 	"github.com/edwardsean/codesmart/backend/internal/domain"
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
 	"github.com/edwardsean/codesmart/backend/pkg/password"
-	"github.com/edwardsean/codesmart/backend/pkg/response"
+	"github.com/edwardsean/codesmart/backend/pkg/utils"
 )
 
 type GithubService struct {
@@ -63,7 +63,7 @@ func (s *GithubService) GetUserRepositories(ctx context.Context, user *domain.Us
 
 	var repositories []domain.GithubRepository
 
-	if err := response.ParseJson(resp.Body, &repositories); err != nil {
+	if err := utils.ParseJson(resp.Body, &repositories); err != nil {
 		return nil, errors.NewError("unable to parse github repos", http.StatusBadRequest)
 	}
 

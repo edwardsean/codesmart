@@ -1,11 +1,9 @@
 package http
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
-	"github.com/edwardsean/codesmart/backend/internal/domain"
 	"github.com/edwardsean/codesmart/backend/internal/handler/http/middleware"
 	"github.com/edwardsean/codesmart/backend/internal/service"
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
@@ -27,32 +25,12 @@ func NewGithubHandler(githubService service.GithubService, authService service.A
 func (h *GithubHandler) RegisterRoutes(router *mux.Router) {
 	gitrouter := router.PathPrefix("/github").Subrouter()
 	authMiddleware := middleware.WithJWTAuth(h.authService)
-	gitrouter.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
-		// fmt.Println("handler", r.Header)
-		// w.WriteHeader(http.StatusOK)
-		// w.Write([]byte("OK"))
-		// json.NewEncoder(w).Encode(map[string]string{"hello": "world"})
-		fmt.Fprintln(w, "OK")
-	})
-	gitrouter.HandleFunc("/getRepositories", authMiddleware(h.handleGetRepositories)).Methods("GET")
-	// gitrouter.HandleFunc("/getRepositories", h.handleGetRepositories).Methods("GET")
-	//
-	// router.HandleFunc("/getRepositories", func(w http.ResponseWriter, r *http.Request) {
-	// 	token, err := r.Cookie("access_token")
-	// 	if err != nil || token.Value == "" {
-	// 		fmt.Fprintln(w, "no token")
-	// 		return
-	// 	}
-	// 	fmt.Fprintf(w, "token: %v", token.Value)
-	// })
+	gitrouter.HandleFunc("/repositories", authMiddleware(h.handleGetRepositories)).Methods("GET")
 }
 
 func (h *GithubHandler) handleGetRepositories(w http.ResponseWriter, r *http.Request) {
-	//get the github token
-	user, ok := r.Context().Value(middleware.UserKey).(*domain.User)
-	if !ok || user == nil {
-		// response.WriteError(w, http.StatusUnauthorized, fmt.Errorf("no valid user in context"))
-		// return errors.ErrInvalidCredentials
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
 		response.WriteError(w, errors.ErrInvalidCredentials)
 		return
 	}
@@ -60,7 +38,7 @@ func (h *GithubHandler) handleGetRepositories(w http.ResponseWriter, r *http.Req
 	repositories, err := h.githubService.GetUserRepositories(r.Context(), user)
 
 	if err != nil {
-		log.Fatalf("failed to get github repositories: %v", err)
+		log.Printf("failed to get github repositories: %v", err)
 		response.WriteError(w, err)
 		return
 	}

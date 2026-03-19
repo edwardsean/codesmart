@@ -5,7 +5,7 @@ import OAuthCallbackContent from "@/app/auth/oauth/callback/OAuthCallbackContent
 export default async function OAuthCallbackPage({
   searchParams,
 }: {
-  searchParams: Promise<{ code?: string }>;
+  searchParams: Promise<{ code?: string; redirect?: string }>;
 }) {
   const params = await searchParams;
 
@@ -15,7 +15,12 @@ export default async function OAuthCallbackPage({
     //so suspense tells prerender everything outside of this suspense first, this code inside will be filled
     //when ready
     <Suspense fallback={<LoadingScreen message="Signing you in..." />}>
-      <OAuthCallbackContent code={params.code} />
+      <OAuthCallbackContent
+        code={params.code}
+        redirect={
+          params.redirect ? decodeURIComponent(params.redirect) : "/dashboard"
+        }
+      />
     </Suspense>
   );
 }

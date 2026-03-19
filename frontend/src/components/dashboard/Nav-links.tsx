@@ -3,7 +3,6 @@
 import { Home, GitBranch, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import styles from "./Nav-links.module.css";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -24,7 +23,14 @@ export default function NavLinks() {
           <Link
             key={item.name}
             href={item.href}
-            className={`${styles.link} ${isActive ? styles.active : ""}`}
+            className={`
+              flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors
+              ${
+                isActive
+                  ? "bg-[#dc503c]/10 text-[#dc503c] font-medium"
+                  : "text-gray-500 dark:text-zinc-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] hover:text-gray-900 dark:hover:text-zinc-100"
+              }
+            `}
           >
             <Icon size={15} />
             {item.name}

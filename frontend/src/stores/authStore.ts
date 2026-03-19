@@ -9,6 +9,7 @@ interface AuthState {
     setHasHydrated: (hydrated: boolean) => void;
     setAuth: (user: User, token: string) => void;
     refreshAccessToken: (user: User, token: string) => void;
+    refreshUser: (user: User) => void;
     logout: () => void;
 }
 
@@ -28,6 +29,14 @@ export const useAuthStore = create<AuthState>()(
                 return state;
             }),
             logout: () => set({ account: null }),
+            refreshUser: (user) => set((state) => {
+                if(state.account?.user.id === user.id) {
+                    return {
+                        account: {...state.account, user}
+                    }
+                }
+                return state;
+            })
         })),
         {
             name: 'auth-storage',

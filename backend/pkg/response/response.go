@@ -2,20 +2,10 @@ package response
 
 import (
 	"encoding/json"
-	stdError "errors"
-	"io"
 	"net/http"
 
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
 )
-
-func ParseJson(body io.Reader, payload any) error {
-	if body == nil {
-		return stdError.New("missing body for parsing")
-	}
-
-	return json.NewDecoder(body).Decode(payload)
-}
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
 	w.Header().Set("Content-Type", "application/json")
