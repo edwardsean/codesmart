@@ -13,7 +13,7 @@ export const authService = (api: AxiosInstance) => {
         },
         me: async () => {
             const response = await api.get("/api/auth/me");
-            return response.data as { user: User};
+            return response.data as { user: User };
         }
     }
     

@@ -22,6 +22,8 @@ type TokenRepository interface {
 	IsBlacklisted(ctx context.Context, token string) (bool, error)
 	StoreOAuthCode(ctx context.Context, code string, data *redis.OAuthCodeData) error
 	ExchangeOAuthCode(ctx context.Context, code string) (*redis.OAuthCodeData, error)
+	StoreConnectCode(ctx context.Context, code string, data *redis.ConnectCodeData) error
+	ExchangeConnectCode(ctx context.Context, connect_code string) (*redis.ConnectCodeData, error)
 }
 
 type ProjectRepository interface {

@@ -18,6 +18,11 @@ type OAuthCodeData struct {
 	User         *domain.User `json:"user"`
 }
 
+type ConnectCodeData struct {
+	UserID   int    `json:"user_id"`
+	Redirect string `json:"redirect"`
+}
+
 func NewTokenRepository(client *RedisClient) *TokenRepository {
 	return &TokenRepository{client: client}
 }
@@ -52,6 +57,30 @@ func (r *TokenRepository) ExchangeOAuthCode(ctx context.Context, code string) (*
 	}
 
 	var data OAuthCodeData
+	if err := json.Unmarshal([]byte(val), &data); err != nil {
+		return nil, err
+	}
+
+	return &data, nil
+}
+
+func (r *TokenRepository) StoreConnectCode(ctx context.Context, code string, data *ConnectCodeData) error {
+	bytes, err := json.Marshal(data)
+
+	if err != nil {
+		return err
+	}
+
+	return r.client.client.Set(ctx, "connect_code:"+code, bytes, 60*time.Second).Err()
+}
+
+func (r *TokenRepository) ExchangeConnectCode(ctx context.Context, connect_code string) (*ConnectCodeData, error) {
+	val, err := r.client.client.GetDel(ctx, "connect_code:"+connect_code).Result() // GetDel = get + delete atomically (one-time use)
+	if err != nil {
+		return nil, err
+	}
+
+	var data ConnectCodeData
 	if err := json.Unmarshal([]byte(val), &data); err != nil {
 		return nil, err
 	}

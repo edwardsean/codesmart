@@ -18,6 +18,7 @@ import type { ProjectStep, GithubInputMethod } from "@/lib/types/project";
 import {
   Difficulty,
   Language,
+  Project,
   ProjectMode,
   Repository,
   SourceType,
@@ -42,7 +43,7 @@ export default function NewProjectPage() {
   const apiAuth = authService(apiPrivate);
   const apiGithub = githubService(apiPrivate);
   const apiProject = projectService(apiPrivate);
-  const { refreshUser } = useAuthStore();
+  const { refreshUser, _hasHydrated, account } = useAuthStore();
 
   const [step, setStep] = useState<ProjectStep>("source");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,29 +70,30 @@ export default function NewProjectPage() {
   const [reposError, setReposError] = useState("");
 
   useEffect(() => {
-    if (searchParams.get("connected") !== "true") return;
+    if (!_hasHydrated) return;
+    if (!account?.accessToken) return;
+    if (searchParams.get("github_connected") !== "true") return;
 
     router.replace("/dashboard/projects/new"); //cleanup the url
-
     const refreshActiveUser = async () => {
       try {
-        const response = await apiAuth.me();
+        const { user } = await apiAuth.me();
 
-        refreshUser(response.user);
+        refreshUser(user);
       } catch (err) {
         console.error("error when hitting me endpoint: ", err);
       }
     };
 
     refreshActiveUser();
-  }, []);
+  }, [_hasHydrated, account?.accessToken]);
 
   async function fetchRepos() {
     setLoadingRepos(true);
     setReposError("");
     try {
-      const response = await apiGithub.getRepositories();
-      setRepos(response.repositories ?? []);
+      const { repositories } = await apiGithub.getRepositories();
+      setRepos(repositories ?? []);
     } catch {
       setReposError(
         "Could not load repositories. Make sure you logged in with GitHub.",
@@ -148,7 +150,7 @@ export default function NewProjectPage() {
     setIsSubmitting(true);
     setError("");
     try {
-      const response = await apiProject.createProject({
+      const { project } = await apiProject.createProject({
         title,
         description,
         language: language as Language,
@@ -158,11 +160,13 @@ export default function NewProjectPage() {
         difficulty: difficulty || undefined,
       });
 
-      router.push(`/dashboard/projects/${response.project.id}`);
+      console.log("project: ", project);
+      router.push(`/dashboard/projects/${project.id}`);
     } catch (err) {
       if (axios.isAxiosError(err)) {
         setError(err.response?.data?.message ?? "Failed to create project");
       } else {
+        console.log("error: ", err);
         setError("Something went wrong");
       }
     } finally {

@@ -75,7 +75,7 @@ func (h *ProjectHandler) handleCreateProject(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	response.WriteJSON(w, http.StatusCreated, project)
+	response.WriteJSON(w, http.StatusCreated, map[string]*dto.ProjectResponseDTO{"project": project})
 }
 
 func (h *ProjectHandler) handleGetProjectByID(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +97,7 @@ func (h *ProjectHandler) handleGetProjectByID(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	response.WriteJSON(w, http.StatusOK, project)
+	response.WriteJSON(w, http.StatusOK, map[string]*dto.ProjectResponseDTO{"project": project})
 }
 
 func (h *ProjectHandler) handleDeleteProjectByID(w http.ResponseWriter, r *http.Request) {

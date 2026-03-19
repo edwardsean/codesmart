@@ -23,10 +23,11 @@ export default function RepositoryList({
   onSelect,
 }: RepositoryListProps) {
   const { account, _hasHydrated } = useAuthStore();
-  const isGithubConnected = !!account?.user.github_id;
-
+  const isGithubConnected =
+    !!account?.user.github_id && account.user.github_id !== null;
+  if (_hasHydrated) console.log("account: ", account);
   // not connected to github
-  if (!isGithubConnected) {
+  if (!isGithubConnected && _hasHydrated) {
     return (
       <div className="rounded-xl border border-dashed border-black/[0.08] dark:border-white/[0.08] p-8 flex flex-col items-center text-center gap-4">
         <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-zinc-800 flex items-center justify-center">

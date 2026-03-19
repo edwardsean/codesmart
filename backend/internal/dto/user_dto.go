@@ -20,5 +20,6 @@ func ToUserResponseDTO(user *domain.User) UserResponseDTO {
 		Email:     user.Email,
 		Username:  user.Username,
 		CreatedAt: user.CreatedAt,
+		GithubID:  user.GitHubID,
 	}
 }

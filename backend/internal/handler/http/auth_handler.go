@@ -46,6 +46,8 @@ func (h *AuthHandler) RegisterRoutes(router *mux.Router) {
 
 	authrouter.HandleFunc("/github/login", h.handleGithubLogin).Methods("GET")
 
+	authrouter.HandleFunc("/github/connect/init", authMiddleware(h.handleGithubConnectInit)).Methods("POST")
+
 	authrouter.HandleFunc("/github/connect", h.handleGithubConnect).Methods("GET")
 
 	authrouter.HandleFunc("/oauth/exchange", h.handleExhangeOAuthCode).Methods("GET")
@@ -99,12 +101,15 @@ func (h *AuthHandler) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("got through the middleware")
+
 	//to make sure it is safe to send to the front end
 	safeUser := dto.UserResponseDTO{
 		ID:        user.ID,
 		Email:     user.Email,
 		Username:  user.Username,
 		CreatedAt: user.CreatedAt,
+		GithubID:  user.GitHubID,
 	}
 
 	response.WriteJSON(w, http.StatusOK, map[string]any{"user": safeUser})
@@ -158,22 +163,16 @@ func (h *AuthHandler) handleGithubCallback(w http.ResponseWriter, r *http.Reques
 
 	//for connect
 	if strings.HasPrefix(state, "connect:") { //means that a user has logged in and wants to connect github
-		user, err := middleware.GetUserFromContext(r)
-		if err != nil {
-			http.Redirect(w, r, config.Envs.FrontendOrigin+"/auth/login?error=unauthorized", http.StatusFound)
-			return
-		}
-
-		redirect, _ := url.QueryUnescape(strings.TrimPrefix(state, "connect:"))
+		connect_code, _ := url.QueryUnescape(strings.TrimPrefix(state, "connect:"))
 
 		//link github to existing account
-		err = h.oauthService.ConnectGithub(r.Context(), user.ID, code)
+		redirect, err := h.oauthService.ConnectGithub(r.Context(), connect_code, code)
 		if err != nil {
 			http.Redirect(w, r, config.Envs.FrontendOrigin+redirect+"?error=connect_failed", http.StatusFound)
 			return
 		}
 
-		http.Redirect(w, r, config.Envs.FrontendOrigin+redirect+"?connected=true", http.StatusFound)
+		http.Redirect(w, r, config.Envs.FrontendOrigin+redirect+"?github_connected=true", http.StatusFound)
 		return
 	}
 
@@ -217,15 +216,38 @@ func (h *AuthHandler) handleGithubLogin(w http.ResponseWriter, r *http.Request) 
 	http.Redirect(w, r, URL, http.StatusFound)
 }
 
-func (h *AuthHandler) handleGithubConnect(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) handleGithubConnectInit(w http.ResponseWriter, r *http.Request) {
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		response.WriteError(w, errors.NewError("unauthorized", http.StatusUnauthorized))
+		return
+	}
+
 	redirect := r.URL.Query().Get("redirect")
 	if redirect == "" {
 		redirect = "/dashboard"
 	}
 
-	uri := config.Envs.FrontendOrigin + "/api/auth/github/callback"
+	connect_code, err := h.oauthService.ConnectGithubInit(r.Context(), user.ID, redirect)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
 
-	state := "connect:" + url.QueryEscape(redirect)
+	response.WriteJSON(w, http.StatusOK, map[string]string{"connect_code": connect_code})
+
+}
+
+func (h *AuthHandler) handleGithubConnect(w http.ResponseWriter, r *http.Request) {
+	connectCode := r.URL.Query().Get("code")
+	if connectCode == "" {
+		http.Redirect(w, r, config.Envs.FrontendOrigin+"/auth/login?error=missing_connect_code", http.StatusFound)
+		return
+	}
+
+	state := "connect:" + connectCode //use this code to get useriD and redirect
+
+	uri := config.Envs.FrontendOrigin + "/api/auth/github/callback"
 
 	if !strings.HasPrefix(uri, config.Envs.FrontendOrigin) {
 		response.WriteError(w, errors.NewError("Invalid redirect URI", http.StatusInternalServerError))

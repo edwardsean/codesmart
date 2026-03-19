@@ -15,6 +15,8 @@ interface CreateProjectRequest {
 export const projectService = (api: AxiosInstance) => ({
     createProject: async (payload: CreateProjectRequest) => {
         const response = await api.post("/api/projects", payload);
-        return response.data as { project: Project}
+        // return response.data as { project: Project}
+        console.log("response from server: ", response);
+        return response.data as { project: Project }
     }
 })

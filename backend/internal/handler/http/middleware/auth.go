@@ -29,14 +29,16 @@ func WithJWTAuth(service service.AuthService) func(http.HandlerFunc) http.Handle
 			//get the token from the user request
 			access_token, err := getAccessTokenFromReq(r)
 			if err != nil {
-				// writeUnauthorizedError(w, stdError.New("permission denied"))
+				log.Printf("failed to get token from request: %v", err)
 				writeUnauthorizedError(w, err)
 				return
 			}
 
+			log.Printf("validating token...")
 			//validate token and fetch claims
 			user, err := service.GetUserFromToken(r.Context(), access_token)
 			if err != nil {
+				log.Printf("GetUserFromToken failed: %v", err)
 				writeUnauthorizedError(w, err)
 				return
 			}
@@ -53,7 +55,7 @@ func WithJWTAuth(service service.AuthService) func(http.HandlerFunc) http.Handle
 			// 	writeUnauthorizedError(w, fmt.Errorf("unable to get user from claims: %v", err))
 			// 	return
 			// }
-
+			log.Printf("middleware passed for user: %d", user.ID)
 			ctx := r.Context()
 			ctx = context.WithValue(ctx, UserKey, user)
 			ctx = context.WithValue(ctx, TokenKey, access_token)

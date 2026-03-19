@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -16,6 +15,7 @@ import (
 	"github.com/edwardsean/codesmart/backend/internal/dto"
 	"github.com/edwardsean/codesmart/backend/internal/repository"
 	"github.com/edwardsean/codesmart/backend/internal/repository/redis"
+	"github.com/edwardsean/codesmart/backend/pkg/errors"
 	"github.com/edwardsean/codesmart/backend/pkg/jwt"
 	"github.com/edwardsean/codesmart/backend/pkg/password"
 	"github.com/edwardsean/codesmart/backend/pkg/utils"
@@ -80,7 +80,7 @@ func (s *oauthService) exchangeCodeForToken(ctx context.Context, code string) (s
 	if ghAccessToken == "" {
 		//ERROR HANDLING
 		// http.Redirect(w, r, "http://localhost:3000/login?error=no_github_token", http.StatusFound)
-		return "", errors.New("no github access token found")
+		return "", errors.NewError("no github access token found", http.StatusInternalServerError)
 	}
 
 	return ghAccessToken, nil
@@ -226,33 +226,47 @@ func (s *oauthService) ExchangeOAuthCode(ctx context.Context, code string) (*dto
 
 }
 
-// service/auth/oauth_service.go
-func (s *oauthService) ConnectGithub(ctx context.Context, userID int, code string) error {
+func (s *oauthService) ConnectGithub(ctx context.Context, connect_code string, code string) (string, error) {
+	data, err := s.tokenRepo.ExchangeConnectCode(ctx, connect_code)
+	if err != nil {
+		return "/dashboard", err
+	}
+
 	ghAccessToken, err := s.exchangeCodeForToken(ctx, code)
 	if err != nil {
-		return err
+		return "/dashboard", err
 	}
 
 	githubUser, err := s.getGithubUser(ctx, ghAccessToken)
 	if err != nil {
-		return err
+		return "/dashboard", err
 	}
 
 	if githubUser.Email == "" {
 		githubUser.Email, err = s.getGithubEmail(ctx, ghAccessToken)
 		if err != nil {
-			return err
+			return "/dashboard", err
 		}
 	}
 
 	encryptionKey, _ := base64.StdEncoding.DecodeString(config.Envs.EncryptionKey)
 	hashedToken, err := password.Encrypt(ghAccessToken, encryptionKey)
 	if err != nil {
-		return err
+		return "/dashboard", err
 	}
 
 	// link github to the existing user — don't create a new user
-	return s.userRepo.LinkGithub(ctx, userID, githubUser.ID, hashedToken)
+	return data.Redirect, s.userRepo.LinkGithub(ctx, data.UserID, githubUser.ID, hashedToken)
+}
+
+func (s *oauthService) ConnectGithubInit(ctx context.Context, userId int, redirect string) (string, error) {
+	connectCode := uuid.New().String()
+	err := s.tokenRepo.StoreConnectCode(ctx, connectCode, &redis.ConnectCodeData{UserID: userId, Redirect: redirect})
+	if err != nil {
+		return "", errors.NewError("failed", http.StatusInternalServerError)
+	}
+
+	return connectCode, nil
 }
 
 func (s *oauthService) getGithubEmail(ctx context.Context, access_token string) (string, error) {

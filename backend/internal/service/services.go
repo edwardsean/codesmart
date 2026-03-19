@@ -18,7 +18,8 @@ type GithubService interface {
 type OAuthService interface {
 	GithubCallback(ctx context.Context, code string) (string, error)
 	ExchangeOAuthCode(ctx context.Context, code string) (*dto.OAuthResultDTO, error)
-	ConnectGithub(ctx context.Context, userId int, code string) error
+	ConnectGithub(ctx context.Context, connect_code string, code string) (string, error)
+	ConnectGithubInit(ctx context.Context, userId int, redirect string) (string, error)
 }
 
 type AuthService interface {
