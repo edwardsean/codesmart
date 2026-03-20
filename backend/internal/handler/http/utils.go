@@ -11,3 +11,8 @@ func parseIDParam(r *http.Request) (int, error) {
 	vars := mux.Vars(r)
 	return strconv.Atoi(vars["id"])
 }
+
+func parseProjectIDParam(r *http.Request) (int, error) {
+	vars := mux.Vars(r)
+	return strconv.Atoi(vars["projectId"])
+}

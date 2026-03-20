@@ -15,17 +15,20 @@ import (
 type GithubHandler struct {
 	// repository_store domain.RepositoryStore
 	githubService service.GithubService
-	authService   service.AuthService
 }
 
-func NewGithubHandler(githubService service.GithubService, authService service.AuthService) *GithubHandler {
-	return &GithubHandler{githubService: githubService, authService: authService}
+func NewGithubHandler(githubService service.GithubService) *GithubHandler {
+	return &GithubHandler{githubService: githubService}
 }
 
-func (h *GithubHandler) RegisterRoutes(router *mux.Router) {
-	gitrouter := router.PathPrefix("/github").Subrouter()
-	authMiddleware := middleware.WithJWTAuth(h.authService)
-	gitrouter.HandleFunc("/repositories", authMiddleware(h.handleGetRepositories)).Methods("GET")
+func (h *GithubHandler) RegisterRoutes(router *mux.Router, authService service.AuthService) {
+	gitRouter := router.PathPrefix("/github").Subrouter()
+	gitRouter.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(middleware.WithJWTAuth(authService)(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r)
+		}))
+	})
+	gitRouter.HandleFunc("/repositories", h.handleGetRepositories).Methods("GET")
 }
 
 func (h *GithubHandler) handleGetRepositories(w http.ResponseWriter, r *http.Request) {

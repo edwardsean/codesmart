@@ -9,6 +9,7 @@ import (
 	"github.com/edwardsean/codesmart/backend/internal/repository/postgres"
 	"github.com/edwardsean/codesmart/backend/internal/repository/redis"
 	"github.com/edwardsean/codesmart/backend/internal/service/auth"
+	"github.com/edwardsean/codesmart/backend/internal/service/file"
 	"github.com/edwardsean/codesmart/backend/internal/service/github"
 	"github.com/edwardsean/codesmart/backend/internal/service/project"
 	"github.com/edwardsean/codesmart/backend/internal/service/user"
@@ -45,20 +46,24 @@ func (s *APIServer) Run() error {
 	redisClient := redis.NewRedisClient(config.Envs.RedisAddr)
 	tokenRedisRepository := redis.NewTokenRepository(redisClient)
 	projectRepository := postgres.NewPostgresProjectStore(s.db)
+	projectFileRepository := postgres.NewPostgresProjectFileStore(s.db)
 
 	oAuthService := auth.NewOAuthService(userRepository, tokenRedisRepository)
 	userService := user.NewUserService(userRepository)
 	authService := auth.NewAuthService(userRepository, tokenRedisRepository)
 	githubService := github.NewGithubService()
 	projectService := project.NewProjectService(projectRepository)
+	projectFileService := file.NewFileService(projectRepository, projectFileRepository, userRepository)
 
 	authHandler := NewAuthHandler(userService, oAuthService, authService) //passess it to the handler where you can call the handler methods like login and register
-	githubHandler := NewGithubHandler(githubService, authService)
+	githubHandler := NewGithubHandler(githubService)
 	projectHandler := NewProjectHandler(projectService)
+	projectFileHandler := NewFileHandler(projectFileService)
 
-	githubHandler.RegisterRoutes(subrouter)
+	githubHandler.RegisterRoutes(subrouter, authService)
 	authHandler.RegisterRoutes(subrouter)
 	projectHandler.RegisterRoutes(subrouter, authService) //auth service for middleware
+	projectFileHandler.RegisterRoutes(subrouter, authService)
 	log.Println("Listening on", s.addr)
 
 	return http.ListenAndServe(s.addr, router) //starts the HTTP server on s.addr and uses the router to handle requests.

@@ -36,3 +36,8 @@ type ProjectService interface {
 	GetProjectByID(ctx context.Context, projectId int, userId int) (*dto.ProjectResponseDTO, error)
 	DeleteProject(ctx context.Context, projectId int, userId int) error
 }
+
+type FileService interface {
+	GetFileTree(ctx context.Context, projectId int, userId int) ([]dto.FileNodeDTO, error)
+	GetFileContent(ctx context.Context, projectId int, userId int, path string) (*dto.FileContentDTO, error)
+}

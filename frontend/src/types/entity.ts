@@ -1,3 +1,7 @@
+
+// these are domain entities that mirror backend
+
+
 export type User = {
     id: number;
     email: string;
@@ -61,4 +65,20 @@ export interface ProjectListItem {
     progress_percentage: number
     status: ProjectStatus
     updated_at: string
+}
+
+//project file
+export interface FileNode {
+  id?: number;
+  path: string;
+  name: string;
+  type: "file" | "dir";
+  children?: FileNode[];
+}
+
+export interface FileContent {
+  id?: number;
+  path: string;
+  name: string;
+  content: string;
 }

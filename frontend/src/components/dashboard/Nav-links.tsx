@@ -1,21 +1,15 @@
 "use client";
 
-import { Home, GitBranch, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: Home },
-  { name: "Projects", href: "/dashboard/projects", icon: GitBranch },
-  { name: "Settings", href: "/dashboard/settings", icon: Settings },
-];
+import { NAV_LINKS } from "@/lib/constants/navigation";
 
 export default function NavLinks() {
   const pathname = usePathname();
 
   return (
     <>
-      {navigation.map((item) => {
+      {NAV_LINKS.map((item) => {
         const Icon = item.icon;
         const isActive = pathname === item.href;
 

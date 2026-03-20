@@ -1,4 +1,4 @@
-import { Project, Language, ProjectMode, SourceType, Difficulty } from "@/types/entity"
+import { Project, Language, ProjectMode, SourceType, Difficulty, ProjectListItem } from "@/types/entity"
 import { AxiosInstance } from "axios"
 
 interface CreateProjectRequest {
@@ -17,6 +17,17 @@ export const projectService = (api: AxiosInstance) => ({
         const response = await api.post("/api/projects", payload);
         // return response.data as { project: Project}
         console.log("response from server: ", response);
-        return response.data as { project: Project }
-    }
+        return response.data as { project: Project };
+    },
+    getProjectByID: async (id: number) => {
+        const response = await api.get(`/api/projects/${id}`);
+        return response.data as { project: Project };
+    },
+    deleteProject: async (id: number) => {
+        await api.delete(`/api/projects/${id}`);
+    },
+    getProjects: async () => {
+        const response = await api.get(`/api/projects`);
+        return response.data as { projects: ProjectListItem[]}
+    } 
 })

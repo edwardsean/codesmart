@@ -30,10 +30,23 @@ func (h *ProjectHandler) RegisterRoutes(router *mux.Router, authService service.
 		}))
 	})
 
+	//for projects CRUD
 	projectRouter.HandleFunc("", h.handleGetProjects).Methods("GET")
 	projectRouter.HandleFunc("", h.handleCreateProject).Methods("POST")
 	projectRouter.HandleFunc("/{id}", h.handleGetProjectByID).Methods("GET")
 	projectRouter.HandleFunc("/{id}", h.handleDeleteProjectByID).Methods("DELETE")
+
+	//for github repos && scratch, the service layer decides whether to hit Github API or the DB based on project.source_type
+	//single file content (?path=backend/cmd/main.go)
+	// projectRouter.HandleFunc("/{id}/files/content", h.handleGetFileContent).Methods("GET")
+	//fetch file tree content from github API
+	// projectRouter.HandleFunc("/{id}/files", h.handleGetFileTree).Methods("GET")
+
+	// //for scratch projects, CRUD on project_files table
+	// projectRouter.HandleFunc("/{id}/files", h.handleCreateFileOrFolder).Methods("POST")
+	// projectRouter.HandleFunc("/{id}/files/{fileId}", h.handleUpdateFileContentOrRename).Methods("PUT")
+	// projectRouter.HandleFunc("/id}/files/{fileId}", h.handleDeleteFileOrFolder).Methods("DELETE")
+
 }
 
 func (h *ProjectHandler) handleGetProjects(w http.ResponseWriter, r *http.Request) {
@@ -91,6 +104,12 @@ func (h *ProjectHandler) handleGetProjectByID(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	//validate that only id that is in the access token can access this project
+	if id != user.ID {
+		response.WriteError(w, errors.NewError("unauthorized", http.StatusUnauthorized))
+		return
+	}
+
 	project, err := h.projectService.GetProjectByID(r.Context(), id, user.ID)
 	if err != nil {
 		response.WriteError(w, err)
@@ -110,6 +129,11 @@ func (h *ProjectHandler) handleDeleteProjectByID(w http.ResponseWriter, r *http.
 	id, err := parseIDParam(r)
 	if err != nil {
 		response.WriteError(w, errors.NewError("invalid project id", http.StatusBadRequest))
+		return
+	}
+
+	if id != user.ID {
+		response.WriteError(w, errors.NewError("unauthorized", http.StatusUnauthorized))
 		return
 	}
 

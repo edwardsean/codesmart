@@ -32,3 +32,11 @@ type ProjectRepository interface {
 	CreateProject(ctx context.Context, project *domain.Project) error
 	DeleteProject(ctx context.Context, projectId int) error
 }
+
+type ProjectFileRepository interface {
+	GetFiles(ctx context.Context, projectID int) ([]domain.ProjectFile, error)
+	GetFileContent(ctx context.Context, projectID int, path string) (*domain.ProjectFile, error)
+	CreateFile(ctx context.Context, file *domain.ProjectFile) error
+	UpdateFile(ctx context.Context, file *domain.ProjectFile) error
+	DeleteFile(ctx context.Context, fileId int) error
+}

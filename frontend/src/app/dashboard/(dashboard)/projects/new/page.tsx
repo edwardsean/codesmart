@@ -14,11 +14,10 @@ import {
 import Input from "@/components/ui/Input";
 import RepositoryList from "@/components/github/RepositoryList";
 import { LANGUAGES, DIFFICULTIES } from "@/lib/constants/project";
-import type { ProjectStep, GithubInputMethod } from "@/lib/types/project";
+import { ProjectStep } from "@/types/entity";
 import {
   Difficulty,
   Language,
-  Project,
   ProjectMode,
   Repository,
   SourceType,
@@ -29,6 +28,8 @@ import { authService } from "@/services/authService";
 import { githubService } from "@/services/githubService";
 import { projectService } from "@/services/projectService";
 import { STEPS } from "@/lib/constants/project";
+
+export type GithubInputMethod = "repos" | "url";
 
 const STEP_TITLES: Record<ProjectStep, string> = {
   source: "Where does your project come from?",
