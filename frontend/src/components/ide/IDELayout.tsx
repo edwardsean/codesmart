@@ -414,7 +414,6 @@ export default function IDELayout({
   );
 }
 
-// ── Activity button ──
 function ActivityButton({
   icon: Icon,
   active,

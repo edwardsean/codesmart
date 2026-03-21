@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import Input from "@/components/ui/Input";
 import RepositoryList from "@/components/github/RepositoryList";
-import { LANGUAGES, DIFFICULTIES } from "@/lib/constants/project";
+import { LANGUAGES, DIFFICULTIES } from "@/types/entity";
 import { ProjectStep } from "@/types/entity";
 import {
   Difficulty,
@@ -27,7 +27,7 @@ import axios from "axios";
 import { authService } from "@/services/authService";
 import { githubService } from "@/services/githubService";
 import { projectService } from "@/services/projectService";
-import { STEPS } from "@/lib/constants/project";
+import { STEPS } from "@/types/entity";
 
 export type GithubInputMethod = "repos" | "url";
 

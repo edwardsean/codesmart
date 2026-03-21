@@ -1,7 +1,6 @@
 
 // these are domain entities that mirror backend
 
-
 export type User = {
     id: number;
     email: string;
@@ -30,12 +29,20 @@ export interface Repository {
 
 
 //project
-export type Language = "go" | "python" | "typescript" | "javascript" | "java" | "c++" 
-export type ProjectMode = "help" | "learn"
-export type SourceType = "github" | "scratch"
-export type Difficulty = "beginner" | "intermediate" | "advanced"
-export type ProjectStatus = "active" | "completed" | "archived"
-export type ProjectStep = "source" | "details" | "mode"
+export const LANGUAGES = ["go", "python", "typescript", "javascript", "java", "c++", "c", "rust", "sql", "markdown", "yaml", "json", "css", "html", "bash"] as const
+export const DIFFICULTIES = ["beginner", "intermediate", "advanced"] as const
+export const STEPS = ["source", "details", "mode"] as const;
+export const PROJECT_MODE = ["help", "learn"] as const;
+export const SOURCE_TYPE = ["github", "scratch"] as const
+export const PROJECT_STATUS = ["active", "completed"] as const
+
+
+export type Language = typeof LANGUAGES[number]
+export type ProjectMode = typeof PROJECT_MODE[number]
+export type SourceType = typeof SOURCE_TYPE[number]
+export type Difficulty = typeof DIFFICULTIES[number]
+export type ProjectStatus = typeof PROJECT_STATUS[number]
+export type ProjectStep = typeof STEPS[number]
 export interface Project {
     id: number
     title: string

@@ -2,7 +2,6 @@
 
 import { useRef } from "react";
 import Editor, { OnMount } from "@monaco-editor/react";
-import { useAuthStore } from "@/stores/authStore";
 
 interface CodeEditorProps {
   value: string;
@@ -35,8 +34,6 @@ export default function CodeEditor({
   path,
 }: CodeEditorProps) {
   const editorRef = useRef<unknown>(null);
-  const { account } = useAuthStore();
-
   // derive monaco language from file extension or language prop
   const ext = path?.split(".").pop() ?? "";
   const monacoLang = LANG_MAP[ext] || LANG_MAP[language] || language;
