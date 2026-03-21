@@ -21,15 +21,16 @@ type FileContentDTO struct {
 }
 
 type CreateFilePayload struct {
-	Path     string `json:"path"     validate:"required"`
-	Content  string `json:"content"`
-	Language string `json:"language"`
-	IsDir    bool   `json:"is_dir"`
+	Path     string          `json:"path"     validate:"required"`
+	Content  string          `json:"content"`
+	Language domain.Language `json:"language"`
+	IsDir    bool            `json:"is_dir"`
 }
 
 type UpdateFilePayload struct {
-	Path    string `json:"path"`    // for rename
-	Content string `json:"content"` // for save
+	Path     string          `json:"path"`    // for rename
+	Content  string          `json:"content"` // for save
+	Language domain.Language `json:"language"`
 }
 
 func ToFileContentDTO(f *domain.ProjectFile) *FileContentDTO {

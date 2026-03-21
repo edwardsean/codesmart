@@ -15,6 +15,15 @@ func NewPostgresProjectFileStore(db *gorm.DB) *PostgresProjectFileStore {
 	return &PostgresProjectFileStore{db: db}
 }
 
+func (s *PostgresProjectFileStore) GetFileByID(ctx context.Context, id int) (*domain.ProjectFile, error) {
+	var file domain.ProjectFile
+	err := s.db.WithContext(ctx).First(&file, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &file, nil
+}
+
 func (s *PostgresProjectFileStore) GetFiles(ctx context.Context, projectID int) ([]domain.ProjectFile, error) {
 	var files []domain.ProjectFile
 	err := s.db.WithContext(ctx).

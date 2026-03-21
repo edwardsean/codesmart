@@ -2,21 +2,31 @@ package project
 
 import (
 	"context"
+	"encoding/base64"
+	"log"
 	"net/http"
+	"strings"
 
+	"github.com/edwardsean/codesmart/backend/internal/clients"
+	"github.com/edwardsean/codesmart/backend/internal/config"
 	"github.com/edwardsean/codesmart/backend/internal/domain"
 	"github.com/edwardsean/codesmart/backend/internal/dto"
 	"github.com/edwardsean/codesmart/backend/internal/repository"
+	"github.com/edwardsean/codesmart/backend/internal/service"
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
+	"github.com/edwardsean/codesmart/backend/pkg/password"
 	"github.com/edwardsean/codesmart/backend/pkg/validator"
 )
 
 type ProjectService struct {
-	projectRepo repository.ProjectRepository
+	projectRepo  repository.ProjectRepository
+	fileRepo     repository.ProjectFileRepository
+	userRepo     repository.UserRepository
+	githubClient clients.GithubClient
 }
 
-func NewProjectService(projectRepo repository.ProjectRepository) *ProjectService {
-	return &ProjectService{projectRepo: projectRepo}
+func NewProjectService(projectRepo repository.ProjectRepository, fileRepo repository.ProjectFileRepository, userRepo repository.UserRepository, githubClient clients.GithubClient) *ProjectService {
+	return &ProjectService{projectRepo: projectRepo, fileRepo: fileRepo, userRepo: userRepo, githubClient: githubClient}
 }
 
 func (s *ProjectService) GetProjects(ctx context.Context, userID int) ([]dto.ProjectListItemDTO, error) {
@@ -73,6 +83,10 @@ func (s *ProjectService) CreateProject(ctx context.Context, userID int, payload 
 		return nil, errors.NewError("failed to create project", http.StatusInternalServerError)
 	}
 
+	if payload.SourceType == domain.SourceGithub {
+		go s.seedGithubFiles(context.Background(), project, userID)
+	}
+
 	result := dto.ToProjectResponseDTO(project)
 	return result, nil
 }
@@ -94,4 +108,117 @@ func (s *ProjectService) DeleteProject(ctx context.Context, id int, userID int) 
 	}
 
 	return nil
+}
+func (s *ProjectService) seedGithubFiles(ctx context.Context, project *domain.Project, userId int) {
+	user, err := s.userRepo.GetUserByID(ctx, userId)
+	if err != nil {
+		log.Printf("seedGithubFiles: failed to get user: %v", err)
+		return
+	}
+
+	if user.GithubToken == "" {
+		log.Printf("seedGithubFiles: user has no github token")
+		return
+	}
+
+	encryptionKey, err := base64.StdEncoding.DecodeString(config.Envs.EncryptionKey)
+	if err != nil {
+		log.Printf("seedGithubFiles: failed to decode encryption key: %v", err)
+		return
+	}
+
+	token, err := password.Decrypt(user.GithubToken, encryptionKey)
+	if err != nil {
+		log.Printf("seedGithubFiles: failed to decrypt token: %v", err)
+		return
+	}
+
+	owner, repo, err := service.ParseGithubURL(project.SourceURL)
+	if err != nil {
+		log.Printf("seedGithubFiles: failed to parse github url: %v", err)
+		return
+	}
+
+	result, err := s.githubClient.GetFileTree(ctx, token, owner, repo)
+	if err != nil {
+		log.Printf("seedGithubFiles: failed to get project tree: %v", err)
+	}
+
+	if result.Truncated {
+		log.Printf("seedGithubFiles: tree is truncated (repo too large), partial seed")
+	}
+
+	//fetch content for each file (skip dirs and large files)
+	const maxFileSizeBytes = 100 * 1024 // 100KB per file limit
+	const maxFiles = 200                // don't seed more than 200 files
+
+	seeded := 0
+	for _, item := range result.Tree {
+		if item.Type != "blob" {
+			continue
+		}
+
+		if item.Size > maxFileSizeBytes {
+			log.Printf("seedGithubFiles: skipping large file %s (%d bytes)", item.Path, item.Size)
+			continue
+		}
+
+		if seeded >= maxFiles {
+			log.Printf("seedGithubFiles: reached max file limit (%d)", maxFiles)
+			break
+		}
+
+		if shouldSkipFile(item.Path) {
+			continue
+		}
+
+		content, err := s.githubClient.GetFileContent(ctx, token, owner, repo, item.Path)
+		if err != nil {
+			log.Printf("seedGithubFiles: failed to fetch %s: %v", item.Path, err)
+			continue
+		}
+
+		file := &domain.ProjectFile{
+			ProjectID: project.ID,
+			FilePath:  item.Path,
+			Content:   content,
+			Language:  domain.Language(service.DetectLanguage(item.Path)),
+		}
+
+		if err := s.fileRepo.CreateFile(ctx, file); err != nil {
+			log.Printf("seedGithubFiles: failed to save %s: %v", item.Path, err)
+			continue
+		}
+
+		seeded++
+	}
+
+	log.Printf("seedGithubFiles: seeded %d files for project %d", seeded, project.ID)
+
+}
+
+func shouldSkipFile(path string) bool {
+	skipDirs := []string{
+		"node_modules/", ".git/", "vendor/", ".next/",
+		"dist/", "build/", "__pycache__/", ".venv/",
+	}
+	for _, dir := range skipDirs {
+		if strings.HasPrefix(path, dir) || strings.Contains(path, "/"+dir) {
+			return true
+		}
+	}
+
+	skipExts := []string{
+		".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg",
+		".woff", ".woff2", ".ttf", ".eot",
+		".zip", ".tar", ".gz", ".exe", ".bin",
+		".lock", // package-lock.json is fine but yarn.lock/pnpm-lock is huge
+	}
+	for _, ext := range skipExts {
+		if strings.HasSuffix(strings.ToLower(path), ext) {
+			return true
+		}
+	}
+
+	return false
 }

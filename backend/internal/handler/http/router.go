@@ -2,9 +2,11 @@ package http
 
 import (
 	"log"
+	"time"
 
 	"net/http"
 
+	githubClient "github.com/edwardsean/codesmart/backend/internal/clients/github"
 	"github.com/edwardsean/codesmart/backend/internal/config"
 	"github.com/edwardsean/codesmart/backend/internal/repository/postgres"
 	"github.com/edwardsean/codesmart/backend/internal/repository/redis"
@@ -42,8 +44,11 @@ func (s *APIServer) Run() error {
 
 	subrouter := router.PathPrefix("/api/v1").Subrouter() //groups routes under api/v1
 
-	userRepository := postgres.PostgreNewUserStore(s.db) //a new store instance using gormDB, if want to use Redis make another store, the NewStore should then be name PostgreNewStore
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	githubClient := githubClient.NewGithubClient(httpClient)
+
 	redisClient := redis.NewRedisClient(config.Envs.RedisAddr)
+	userRepository := postgres.PostgreNewUserStore(s.db) //a new store instance using gormDB, if want to use Redis make another store, the NewStore should then be name PostgreNewStore
 	tokenRedisRepository := redis.NewTokenRepository(redisClient)
 	projectRepository := postgres.NewPostgresProjectStore(s.db)
 	projectFileRepository := postgres.NewPostgresProjectFileStore(s.db)
@@ -51,9 +56,9 @@ func (s *APIServer) Run() error {
 	oAuthService := auth.NewOAuthService(userRepository, tokenRedisRepository)
 	userService := user.NewUserService(userRepository)
 	authService := auth.NewAuthService(userRepository, tokenRedisRepository)
-	githubService := github.NewGithubService()
-	projectService := project.NewProjectService(projectRepository)
-	projectFileService := file.NewFileService(projectRepository, projectFileRepository, userRepository)
+	githubService := github.NewGithubService(githubClient)
+	projectService := project.NewProjectService(projectRepository, projectFileRepository, userRepository, githubClient)
+	projectFileService := file.NewFileService(projectRepository, projectFileRepository, userRepository, githubClient)
 
 	authHandler := NewAuthHandler(userService, oAuthService, authService) //passess it to the handler where you can call the handler methods like login and register
 	githubHandler := NewGithubHandler(githubService)

@@ -3,33 +3,32 @@ package file
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
+	"github.com/edwardsean/codesmart/backend/internal/clients"
 	"github.com/edwardsean/codesmart/backend/internal/config"
 	"github.com/edwardsean/codesmart/backend/internal/domain"
 	"github.com/edwardsean/codesmart/backend/internal/dto"
 	"github.com/edwardsean/codesmart/backend/internal/repository"
+	"github.com/edwardsean/codesmart/backend/internal/service"
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
 	"github.com/edwardsean/codesmart/backend/pkg/password"
-	"github.com/edwardsean/codesmart/backend/pkg/utils"
 )
 
 type FileService struct {
-	projectRepo repository.ProjectRepository
-	fileRepo    repository.ProjectFileRepository
-	userRepo    repository.UserRepository
-	httpClient  *http.Client
+	projectRepo  repository.ProjectRepository
+	fileRepo     repository.ProjectFileRepository
+	userRepo     repository.UserRepository
+	githubClient clients.GithubClient
 }
 
-func NewFileService(projectRepo repository.ProjectRepository, fileRepo repository.ProjectFileRepository, userRepo repository.UserRepository) *FileService {
+func NewFileService(projectRepo repository.ProjectRepository, fileRepo repository.ProjectFileRepository, userRepo repository.UserRepository, githubClient clients.GithubClient) *FileService {
 	return &FileService{
-		projectRepo: projectRepo,
-		fileRepo:    fileRepo,
-		userRepo:    userRepo,
-		httpClient:  &http.Client{Timeout: 10 * time.Second},
+		projectRepo:  projectRepo,
+		fileRepo:     fileRepo,
+		userRepo:     userRepo,
+		githubClient: githubClient,
 	}
 }
 
@@ -69,49 +68,110 @@ func (s *FileService) GetFileContent(ctx context.Context, projectId int, userId 
 	return s.getDBFileContent(ctx, projectId, path)
 }
 
+func (s *FileService) CreateFile(ctx context.Context, projectId int, userId int, payload dto.CreateFilePayload) (*dto.FileContentDTO, error) {
+	project, err := s.projectRepo.GetProjectByID(ctx, projectId)
+	if err != nil {
+		return nil, errors.NewError("project not found", http.StatusNotFound)
+	}
+
+	//ownership
+	if project.UserID != userId {
+		return nil, errors.NewError("forbidden", http.StatusForbidden)
+	}
+
+	file := &domain.ProjectFile{
+		ProjectID: projectId,
+		FilePath:  payload.Path,
+		Content:   payload.Content,
+		Language:  domain.Language(payload.Language),
+	}
+
+	if err := s.fileRepo.CreateFile(ctx, file); err != nil {
+		return nil, errors.NewError("failed to create file", http.StatusInternalServerError)
+	}
+
+	return dto.ToFileContentDTO(file), nil
+}
+
+func (s *FileService) UpdateFile(ctx context.Context, projectId, userId, fileId int, payload dto.UpdateFilePayload) error {
+	project, err := s.projectRepo.GetProjectByID(ctx, projectId)
+	if err != nil {
+		return errors.NewError("project not found", http.StatusNotFound)
+	}
+
+	//ownership
+	if project.UserID != userId {
+		return errors.NewError("forbidden", http.StatusForbidden)
+	}
+
+	existing, err := s.fileRepo.GetFileByID(ctx, fileId)
+	if err != nil {
+		return errors.NewError("file not found", http.StatusNotFound)
+	}
+
+	if existing.ProjectID != projectId {
+		return errors.NewError("file does not belong to this project", http.StatusForbidden)
+	}
+
+	if payload.Path != "" {
+		existing.FilePath = payload.Path
+		if payload.Language == "" {
+			existing.Language = domain.Language(service.DetectLanguage(payload.Path))
+		}
+	}
+
+	if payload.Content != "" {
+		existing.Content = payload.Content
+	}
+
+	return s.fileRepo.UpdateFile(ctx, existing)
+
+}
+
+func (s *FileService) DeleteFile(ctx context.Context, projectId, userId, fileId int) error {
+	project, err := s.projectRepo.GetProjectByID(ctx, projectId)
+	if err != nil {
+		return errors.NewError("project not found", http.StatusNotFound)
+	}
+
+	//ownership
+	if project.UserID != userId {
+		return errors.NewError("forbidden", http.StatusForbidden)
+	}
+
+	file, err := s.fileRepo.GetFileByID(ctx, fileId)
+	if err != nil {
+		return errors.NewError("file not found", http.StatusNotFound)
+	}
+
+	if file.ProjectID != projectId {
+		return errors.NewError("file does not belong to this project", http.StatusForbidden)
+	}
+
+	return s.fileRepo.DeleteFile(ctx, fileId)
+}
+
 func (s *FileService) getGithubFileContent(ctx context.Context, project *domain.Project, path string) (*dto.FileContentDTO, error) {
 	token, err := s.decryptGithubToken(ctx, project)
 	if err != nil {
 		return nil, err
 	}
 
-	owner, repo, err := parseGithubURL(project.SourceURL)
+	owner, repo, err := service.ParseGithubURL(project.SourceURL)
 	if err != nil {
 		return nil, err
 	}
 
 	// use GitHub tree API — recursive=1 gets the full tree in one call
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, path)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	decoded, err := s.githubClient.GetFileContent(ctx, token, owner, repo, path)
 
-	resp, err := s.httpClient.Do(req)
-	if err != nil || resp.StatusCode != 200 {
-		return nil, errors.NewError("failed to fetch GitHub file tree", http.StatusBadGateway)
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Content  string `json:"content"` // base64 encoded
-		Encoding string `json:"encoding"`
-		Name     string `json:"name"`
-	}
-
-	if err := utils.ParseJson(resp.Body, &result); err != nil {
-		return nil, errors.NewError("failed to parse file content", http.StatusInternalServerError)
-	}
-
-	//the content github returns is base64 encoded content
-	decoded, err := base64.StdEncoding.DecodeString(
-		strings.ReplaceAll(result.Content, "\n", ""),
-	)
 	if err != nil {
 		return nil, errors.NewError("failed to decode file content", http.StatusInternalServerError)
 	}
 
 	return &dto.FileContentDTO{
 		Path:    path,
-		Name:    result.Name,
+		Name:    getFileName(path),
 		Content: string(decoded),
 	}, nil
 }
@@ -131,32 +191,16 @@ func (s *FileService) getGithubFileTree(ctx context.Context, project *domain.Pro
 		return nil, err
 	}
 
-	owner, repo, err := parseGithubURL(project.SourceURL)
+	owner, repo, err := service.ParseGithubURL(project.SourceURL)
 	if err != nil {
 		return nil, err
 	}
 
 	// use GitHub tree API — recursive=1 gets the full tree in one call
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/git/trees/HEAD?recursive=1", owner, repo)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	result, err := s.githubClient.GetFileTree(ctx, token, owner, repo)
 
-	resp, err := s.httpClient.Do(req)
-	if err != nil || resp.StatusCode != 200 {
-		return nil, errors.NewError("failed to fetch GitHub file tree", http.StatusBadGateway)
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Tree []struct {
-			Path string `json:"path"`
-			Type string `json:"type"` // "blob" = file, "tree" = dir
-			URL  string `json:"url"`
-		} `json:"tree"`
-	}
-
-	if err := utils.ParseJson(resp.Body, &result); err != nil {
-		return nil, errors.NewError("failed to parse GitHub tree", http.StatusInternalServerError)
+	if err != nil {
+		return nil, errors.NewError(err.Error(), http.StatusInternalServerError)
 	}
 
 	nodes := make([]dto.FileNodeDTO, 0, len(result.Tree)) //length = 0, capacity = number of files (so go doesnt need to allocate space when exceed to grow capacity)
@@ -217,13 +261,4 @@ func (s *FileService) decryptGithubToken(ctx context.Context, project *domain.Pr
 func getFileName(path string) string {
 	parts := strings.Split(path, "/")
 	return parts[len(parts)-1]
-}
-
-func parseGithubURL(url string) (owner, repo string, err error) {
-	// https://github.com/owner/repo
-	parts := strings.Split(strings.TrimPrefix(url, "https://github.com/"), "/")
-	if len(parts) < 2 {
-		return "", "", fmt.Errorf("invalid github url: %s", url)
-	}
-	return parts[0], parts[1], nil
 }

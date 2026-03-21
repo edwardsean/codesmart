@@ -3,27 +3,24 @@ package github
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
-	"io"
 	"net/http"
-	"time"
 
+	"github.com/edwardsean/codesmart/backend/internal/clients"
 	"github.com/edwardsean/codesmart/backend/internal/config"
 	"github.com/edwardsean/codesmart/backend/internal/domain"
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
 	"github.com/edwardsean/codesmart/backend/pkg/password"
-	"github.com/edwardsean/codesmart/backend/pkg/utils"
 )
 
 type GithubService struct {
-	httpClient *http.Client
+	githubClient clients.GithubClient
 }
 
-func NewGithubService() *GithubService {
-	return &GithubService{httpClient: &http.Client{Timeout: 10 * time.Second}}
+func NewGithubService(githubClient clients.GithubClient) *GithubService {
+	return &GithubService{githubClient: githubClient}
 }
 
-func (s *GithubService) GetUserRepositories(ctx context.Context, user *domain.User) (*[]domain.GithubRepository, error) {
+func (s *GithubService) GetUserRepositories(ctx context.Context, user *domain.User) ([]domain.GithubRepository, error) {
 	//if there is no github token (user didnt login using github)
 	if user.GithubToken == "" {
 		return nil, errors.NewError("please login using github", http.StatusBadRequest)
@@ -42,30 +39,7 @@ func (s *GithubService) GetUserRepositories(ctx context.Context, user *domain.Us
 	}
 
 	//get repos
-	request, err := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/user/repos", nil)
+	repositories, err := s.githubClient.GetRepositories(ctx, ghAccessToken)
 
-	if err != nil {
-		return nil, errors.NewError("unable to fetch github repo api", http.StatusBadRequest)
-	}
-
-	request.Header.Set("Authorization", "Bearer "+ghAccessToken)
-	resp, err := s.httpClient.Do(request)
-	if err != nil {
-		return nil, errors.NewError(fmt.Sprintf("unable to fetch github repo api: %v", err), http.StatusBadRequest)
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, errors.NewError(fmt.Sprintf("GitHub API error: status=%d, body=%s", resp.StatusCode, string(body)), http.StatusBadRequest)
-	}
-
-	var repositories []domain.GithubRepository
-
-	if err := utils.ParseJson(resp.Body, &repositories); err != nil {
-		return nil, errors.NewError("unable to parse github repos", http.StatusBadRequest)
-	}
-
-	return &repositories, nil
+	return repositories, nil
 }
