@@ -1,7 +1,7 @@
 import axiosInstance from "@/lib/api";
 import axios from "axios";
-import { processQueue, refreshState } from "@/lib/refreshQueue";
-import { useAuthStore } from "@/stores/authStore";
+import { processQueue, refreshState } from "@/utils/auth.utils";
+import { useAuthStore } from "@/stores/auth.store";
 
 const useRefreshToken = () => {
   const { refreshAccessToken, logout, account } = useAuthStore();

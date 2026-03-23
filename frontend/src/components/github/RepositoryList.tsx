@@ -3,9 +3,9 @@
 import { Github } from "lucide-react";
 import { Skeleton } from "@/components/ui/Skeleton";
 import RepositoryCard from "@/components/github/RepositoryCard";
-import { Repository } from "@/types/entity";
-import { useAuthStore } from "@/stores/authStore";
-import GithubButton from "../auth/GithubButton";
+import { Repository } from "@/types/repository.types";
+import { useAuthStore } from "@/stores/auth.store";
+import GithubButton from "@/components/auth/GithubButton";
 
 interface RepositoryListProps {
   repos: Repository[];

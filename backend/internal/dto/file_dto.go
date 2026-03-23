@@ -7,14 +7,14 @@ import (
 )
 
 type FileNodeDTO struct {
-	ID   int    `json:"id,omitempty"`
+	ID   int    `json:"id"`
 	Path string `json:"path"`
 	Name string `json:"name"`
 	Type string `json:"type"` // "file" or "dir"
 }
 
 type FileContentDTO struct {
-	ID      int    `json:"id,omitempty"`
+	ID      int    `json:"id"`
 	Path    string `json:"path"`
 	Name    string `json:"name"`
 	Content string `json:"content"`

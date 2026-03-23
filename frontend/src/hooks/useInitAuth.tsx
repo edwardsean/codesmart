@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useAuthStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/auth.store";
 import useRefreshToken from "@/hooks/useRefreshToken";
 
 export const useInitAuth = () => {
@@ -9,6 +9,8 @@ export const useInitAuth = () => {
   useEffect(() => {
     if (!_hasHydrated) return;
 
+    console.log("account: ", account);
+    console.log("localStorage:", localStorage.getItem("auth-storage"));
     if (account?.user && !account?.accessToken) refresh();
   }, [_hasHydrated]);
 };

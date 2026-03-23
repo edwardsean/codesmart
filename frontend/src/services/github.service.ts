@@ -1,4 +1,4 @@
-import { Repository } from "@/types/entity";
+import { Repository } from "@/types/repository.types";
 import { AxiosInstance } from "axios"
 
 

@@ -1,6 +1,6 @@
 // services/fileService.ts
 import { AxiosInstance } from "axios";
-import { FileNode, FileContent } from "@/types/entity";
+import { FileNode, FileContent } from "@/types/project.file.types";
 
 
 interface CreateFilePayload {
@@ -10,7 +10,7 @@ interface CreateFilePayload {
   is_dir?: boolean;
 }
 
-interface UpdateFilePayload {
+export interface UpdateFilePayload {
   path?: string;    // rename
   content?: string; // save
 }
@@ -56,12 +56,12 @@ export const fileService = (api: AxiosInstance) => ({
     const res = await api.get(`/api/projects/${projectId}/files/content`, {
       params: { path },
     });
-    return res.data.file;
+    return res.data.file as FileContent;
   },
 
   createFile: async (projectId: number, payload: CreateFilePayload): Promise<FileContent> => {
     const res = await api.post(`/api/projects/${projectId}/files`, payload);
-    return res.data.file;
+    return res.data.file as FileContent;
   },
 
   updateFile: async (projectId: number, fileId: number, payload: UpdateFilePayload): Promise<void> => {

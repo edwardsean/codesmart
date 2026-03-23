@@ -1,12 +1,14 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import Editor, { OnMount } from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
 
 interface CodeEditorProps {
   value: string;
   language?: string;
   onChange?: (value: string) => void;
+  onSave?: () => void;
   readOnly?: boolean;
   path?: string;
 }
@@ -28,26 +30,37 @@ const LANG_MAP: Record<string, string> = {
 
 export default function CodeEditor({
   value,
-  language = "plaintext",
+  language,
   onChange,
+  onSave,
   readOnly = false,
   path,
 }: CodeEditorProps) {
-  const editorRef = useRef<unknown>(null);
-  // derive monaco language from file extension or language prop
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const onSaveRef = useRef(onSave);
+
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
+
   const ext = path?.split(".").pop() ?? "";
-  const monacoLang = LANG_MAP[ext] || LANG_MAP[language] || language;
+  const monacoLang =
+    LANG_MAP[ext] || LANG_MAP[language ?? ""] || language || "plaintext";
 
-  const handleMount: OnMount = (editor) => {
-    editorRef.current = editor;
-    editor.focus();
-  };
-
-  // determine theme based on current html class
   const isDark =
     typeof document !== "undefined"
       ? document.documentElement.classList.contains("dark")
       : true;
+
+  const handleMount: OnMount = (editor, monacoInstance) => {
+    editorRef.current = editor;
+    editor.focus();
+
+    editor.addCommand(
+      monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS,
+      () => onSaveRef.current?.(),
+    );
+  };
 
   return (
     <Editor
@@ -57,10 +70,10 @@ export default function CodeEditor({
       theme={isDark ? "vs-dark" : "light"}
       onChange={(val) => onChange?.(val ?? "")}
       onMount={handleMount}
-      path={path} // keeps separate undo/redo history per file
+      path={path}
       options={{
         fontSize: 13,
-        fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
         fontLigatures: true,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,

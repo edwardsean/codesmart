@@ -1,42 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Plus, Code2 } from "lucide-react";
 import SectionHeader from "@/components/ui/SectionHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import ProjectCard from "@/components/dashboard/ProjectCard";
 import { Skeleton } from "@/components/ui/Skeleton";
-import useAxiosPrivate from "@/hooks/useAxiosPrivate";
-import { projectService } from "@/services/projectService";
-import { ProjectListItem } from "@/types/entity";
-import { useAuthStore } from "@/stores/authStore";
+import { Project } from "@/types/project.types";
+import { useProjects } from "@/hooks/query/useProjects";
 
 export default function ProjectsPage() {
-  const api = useAxiosPrivate();
-  const apiProject = projectService(api);
-  const { _hasHydrated, account } = useAuthStore();
-
-  const [projects, setProjects] = useState<ProjectListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!_hasHydrated || !account?.accessToken) return;
-
-    const fetchProjects = async () => {
-      try {
-        const { projects } = await apiProject.getProjects();
-        setProjects(projects);
-      } catch {
-        setError("Failed to load projects.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProjects();
-  }, [_hasHydrated, account?.accessToken]);
+  const { data: projects, isLoading, error } = useProjects();
+  const active = projects?.filter((p: Project) => p.status === "active") ?? [];
+  const completed =
+    projects?.filter((p: Project) => p.status === "completed") ?? [];
 
   return (
     <div>
@@ -64,12 +41,12 @@ export default function ProjectsPage() {
       {/* Error */}
       {error && (
         <p className="text-xs text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-6">
-          {error}
+          Failed to load projects.
         </p>
       )}
 
       {/* Loading */}
-      {loading && (
+      {isLoading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {[...Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-40" />
@@ -78,7 +55,7 @@ export default function ProjectsPage() {
       )}
 
       {/* Empty */}
-      {!loading && !error && projects.length === 0 && (
+      {!isLoading && !error && projects?.length === 0 && (
         <EmptyState
           icon={Code2}
           title="No projects yet"
@@ -91,32 +68,25 @@ export default function ProjectsPage() {
       )}
 
       {/* Project grid */}
-      {!loading && projects.length > 0 && (
+      {!isLoading && projects && projects.length > 0 && (
         <>
-          {/* Active */}
-          {projects.filter((p) => p.status === "active").length > 0 && (
+          {active.length > 0 && (
             <div className="mb-8">
               <SectionHeader label="Active" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {projects
-                  .filter((p) => p.status === "active")
-                  .map((p) => (
-                    <ProjectCard key={p.id} project={p} />
-                  ))}
+                {active.map((p: Project) => (
+                  <ProjectCard key={p.id} project={p} />
+                ))}
               </div>
             </div>
           )}
-
-          {/* Completed */}
-          {projects.filter((p) => p.status === "completed").length > 0 && (
+          {completed.length > 0 && (
             <div>
               <SectionHeader label="Completed" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {projects
-                  .filter((p) => p.status === "completed")
-                  .map((p) => (
-                    <ProjectCard key={p.id} project={p} />
-                  ))}
+                {completed.map((p: Project) => (
+                  <ProjectCard key={p.id} project={p} />
+                ))}
               </div>
             </div>
           )}

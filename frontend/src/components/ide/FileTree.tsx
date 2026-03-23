@@ -12,12 +12,14 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
-import { FileNode } from "@/types/entity";
-import { Skeleton } from "../ui/Skeleton";
+import { FileNode } from "@/types/project.file.types";
+import { usePrefetchFileContent } from "@/hooks/query/useFileContent";
+import { ActiveFile } from "@/context/IDEContext";
 
 interface FileTreeProps {
+  projectId: string;
   files: FileNode[];
-  activeFile?: string;
+  activeFile?: ActiveFile | null;
   projectTitle: string;
   isGithub?: boolean;
   loading: boolean;
@@ -47,6 +49,7 @@ function getExt(name: string) {
 }
 
 function FileTreeNode({
+  projectId,
   node,
   depth,
   activeFile,
@@ -56,9 +59,10 @@ function FileTreeNode({
   onRename,
   onDelete,
 }: {
+  projectId: string;
   node: FileNode;
   depth: number;
-  activeFile?: string;
+  activeFile?: ActiveFile | null;
   isGithub?: boolean;
   onFileSelect: (n: FileNode) => void;
   onCreateFile?: (parentPath: string, isDir: boolean) => void;
@@ -70,9 +74,10 @@ function FileTreeNode({
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.name);
   const renameRef = useRef<HTMLInputElement>(null);
-  const isActive = node.path === activeFile;
+  const isActive = activeFile && node.path === activeFile.path;
   const ext = getExt(node.name);
   const color = LANG_COLORS[ext] ?? "text-gray-400 dark:text-zinc-500";
+  const prefetch = usePrefetchFileContent(projectId);
 
   function handleRenameSubmit() {
     if (renameValue.trim() && renameValue !== node.name) {
@@ -165,6 +170,7 @@ function FileTreeNode({
         {open &&
           node.children?.map((child) => (
             <FileTreeNode
+              projectId={projectId}
               key={child.path}
               node={child}
               depth={depth + 1}
@@ -189,7 +195,11 @@ function FileTreeNode({
           : "text-gray-500 dark:text-zinc-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
       }`}
       style={indent}
+      onMouseEnter={() => {
+        if (node.type === "file") prefetch(node.path, node.id);
+      }}
       onClick={() => onFileSelect(node)}
+      role="button"
     >
       <File size={12} className={`flex-shrink-0 ${color}`} />
 
@@ -239,6 +249,7 @@ function FileTreeNode({
 }
 
 export default function FileTree({
+  projectId,
   loading,
   files,
   activeFile,
@@ -293,6 +304,7 @@ export default function FileTree({
         ) : (
           files.map((node) => (
             <FileTreeNode
+              projectId={projectId}
               key={node.path}
               node={node}
               depth={0}

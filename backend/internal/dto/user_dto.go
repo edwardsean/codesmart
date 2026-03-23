@@ -12,6 +12,7 @@ type UserResponseDTO struct {
 	Username  string    `json:"username"`
 	GithubID  int       `json:"github_id,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
+	XPPoints  int       `json:"xp_points"`
 }
 
 func ToUserResponseDTO(user *domain.User) UserResponseDTO {

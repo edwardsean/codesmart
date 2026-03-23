@@ -84,6 +84,7 @@ func (h *FileHandler) handleGetFileContent(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	log.Printf("content: %v", content)
 	response.WriteJSON(w, http.StatusOK, map[string]any{"file": content})
 }
 

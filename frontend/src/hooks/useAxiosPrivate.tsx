@@ -1,7 +1,7 @@
 import { useLayoutEffect } from "react";
 import useRefreshToken from "./useRefreshToken";
 import { instance } from "@/lib/api";
-import { useAuthStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/auth.store";
 
 const useAxiosPrivate = () => {
   const { account } = useAuthStore();

@@ -4,12 +4,18 @@ import StatCard from "@/components/ui/StatCard";
 import QuickActionCard from "@/components/ui/QuickActionCard";
 import EmptyState from "@/components/ui/EmptyState";
 import SectionHeader from "@/components/ui/SectionHeader";
-import { useAuthStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/auth.store";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useProjects } from "@/hooks/query/useProjects";
+import ProjectCard from "@/components/dashboard/ProjectCard";
+import { Project } from "@/types/project.types";
 
 export default function Dashboard() {
   const { account, _hasHydrated } = useAuthStore();
+  const { data: projects, isLoading } = useProjects();
+
   const username = account?.user.username;
+  const recentProjects = projects?.slice(0, 4) ?? [];
 
   if (!_hasHydrated) {
     return (
@@ -64,10 +70,14 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Stats */}
+      {/* Stats — real data */}
       <div className="grid grid-cols-3 gap-3 mb-10">
-        <StatCard label="Projects" value="0" icon={Code2} />
-        <StatCard label="XP earned" value="0" icon={Trophy} />
+        <StatCard label="Projects" value={projects?.length ?? 0} icon={Code2} />
+        <StatCard
+          label="XP earned"
+          value={account?.user.xp_points ?? 0}
+          icon={Trophy}
+        />
         <StatCard label="Hours spent" value="0" icon={Clock} />
       </div>
 
@@ -76,15 +86,34 @@ export default function Dashboard() {
         label="Recent projects"
         viewAllHref="/dashboard/projects"
       />
-      <EmptyState
-        icon={Code2}
-        title="No projects yet"
-        description="Import a GitHub repo or start from scratch — Smarty will turn it into a learning path."
-        action={{
-          label: "Create your first project",
-          href: "/dashboard/projects/new",
-        }}
-      />
+
+      {isLoading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[...Array(2)].map((_, i) => (
+            <Skeleton key={i} className="h-40" />
+          ))}
+        </div>
+      )}
+
+      {!isLoading && recentProjects.length === 0 && (
+        <EmptyState
+          icon={Code2}
+          title="No projects yet"
+          description="Import a GitHub repo or start from scratch — Smarty will turn it into a learning path."
+          action={{
+            label: "Create your first project",
+            href: "/dashboard/projects/new",
+          }}
+        />
+      )}
+
+      {!isLoading && recentProjects.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {recentProjects.map((p: Project) => (
+            <ProjectCard key={p.id} project={p} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

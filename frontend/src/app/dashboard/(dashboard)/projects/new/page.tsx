@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAuthStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/auth.store";
 import {
   Github,
   Code2,
@@ -13,23 +13,19 @@ import {
 } from "lucide-react";
 import Input from "@/components/ui/Input";
 import RepositoryList from "@/components/github/RepositoryList";
-import { LANGUAGES, DIFFICULTIES } from "@/types/entity";
-import { ProjectStep } from "@/types/entity";
+import { ProjectStep, GithubInputMethod } from "@/types/project.types";
 import {
   Difficulty,
   Language,
   ProjectMode,
-  Repository,
   SourceType,
-} from "@/types/entity";
+} from "@/types/project.types";
+import { Repository } from "@/types/repository.types";
 import useAxiosPrivate from "@/hooks/useAxiosPrivate";
-import axios from "axios";
-import { authService } from "@/services/authService";
-import { githubService } from "@/services/githubService";
-import { projectService } from "@/services/projectService";
-import { STEPS } from "@/types/entity";
-
-export type GithubInputMethod = "repos" | "url";
+import { authService } from "@/services/auth.service";
+import { githubService } from "@/services/github.service";
+import { STEPS, LANGUAGES, DIFFICULTIES } from "@/constants/project";
+import { useCreateProjects } from "@/hooks/query/useCreateProjects";
 
 const STEP_TITLES: Record<ProjectStep, string> = {
   source: "Where does your project come from?",
@@ -38,16 +34,15 @@ const STEP_TITLES: Record<ProjectStep, string> = {
 };
 
 export default function NewProjectPage() {
+  const { mutate: createProject, isPending } = useCreateProjects();
   const router = useRouter();
   const searchParams = useSearchParams();
   const apiPrivate = useAxiosPrivate();
   const apiAuth = authService(apiPrivate);
   const apiGithub = githubService(apiPrivate);
-  const apiProject = projectService(apiPrivate);
   const { refreshUser, _hasHydrated, account } = useAuthStore();
 
   const [step, setStep] = useState<ProjectStep>("source");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   // source
@@ -147,11 +142,9 @@ export default function NewProjectPage() {
     setStep(STEPS[stepIndex + 1]);
   }
 
-  async function handleSubmit() {
-    setIsSubmitting(true);
-    setError("");
-    try {
-      const { project } = await apiProject.createProject({
+  function handleSubmit() {
+    createProject(
+      {
         title,
         description,
         language: language as Language,
@@ -159,20 +152,13 @@ export default function NewProjectPage() {
         source_type: sourceType as SourceType,
         source_url: sourceType === "github" ? sourceURL : undefined,
         difficulty: difficulty || undefined,
-      });
-
-      console.log("project: ", project);
-      router.push(`/dashboard/projects/${project.id}`);
-    } catch (err) {
-      if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.message ?? "Failed to create project");
-      } else {
-        console.log("error: ", err);
-        setError("Something went wrong");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+      },
+      {
+        onSuccess: (project) =>
+          router.push(`/dashboard/projects/${project.id}`),
+        onError: () => setError("Failed to create project"),
+      },
+    );
   }
 
   return (
@@ -470,12 +456,12 @@ export default function NewProjectPage() {
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={!canProceed() || isSubmitting}
+            disabled={!canProceed() || isPending}
             className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-opacity
               bg-[#dc503c] text-white hover:opacity-85 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? "Creating..." : "Create project"}{" "}
-            {!isSubmitting && <ArrowRight size={14} />}
+            {isPending ? "Creating..." : "Create project"}{" "}
+            {!isPending && <ArrowRight size={14} />}
           </button>
         )}
       </div>

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Button from "@/components/ui/Button";
 import { Github } from "lucide-react";
 import useAxiosPrivate from "@/hooks/useAxiosPrivate";
-import { githubService } from "@/services/githubService";
+import { githubService } from "@/services/github.service";
 import axios from "axios";
 
 interface GithubButtonProps {

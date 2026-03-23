@@ -15,11 +15,11 @@ import {
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import ResizablePanel from "@/components/ide/ResizablePanel";
 import FileTree from "@/components/ide/FileTree";
-import { IDEProvider, useIDE } from "@/context/IDEProvider";
-import { useAuthStore } from "@/stores/authStore";
-import { NAV_LINKS } from "@/lib/constants/navigation";
-import { FileNode } from "@/types/entity";
-import { fileService } from "@/services/fileService";
+import { IDEProvider, useIDE } from "@/context/IDEContext";
+import { useAuthStore } from "@/stores/auth.store";
+import { NAV_LINKS } from "@/constants/navigation";
+import { FileNode } from "@/types/project.file.types";
+import { fileService } from "@/services/file.service";
 import useAxiosPrivate from "@/hooks/useAxiosPrivate";
 import axios from "axios";
 
@@ -40,8 +40,8 @@ function IDEShell({ children, projectId, projectTitle }: IDELayoutProps) {
     isGithub,
     activeFile,
     setActiveFile,
-    setFileContent,
     setFiles,
+    openFile,
   } = useIDE();
 
   console.log("files in shell: ", files);
@@ -68,18 +68,7 @@ function IDEShell({ children, projectId, projectTitle }: IDELayoutProps) {
 
   async function handleFileSelect(node: FileNode) {
     if (node.type === "dir") return;
-    setActiveFile(node.path);
-    try {
-      const content = await apiFile.getFileContent(
-        Number(projectId),
-        node.path,
-      );
-
-      console.log("file content: ", content);
-      setFileContent(content.content);
-    } catch {
-      setFileContent("// Failed to load file content");
-    }
+    openFile(node);
   }
 
   async function handleCreateFile(parentPath: string, isDir: boolean) {
@@ -108,7 +97,8 @@ function IDEShell({ children, projectId, projectTitle }: IDELayoutProps) {
       await apiFile.updateFile(Number(projectId), node.id, { path: newPath });
       const tree = await apiFile.getFileTree(Number(projectId));
       setFiles(tree);
-      if (activeFile === node.path) setActiveFile(newPath);
+      if (activeFile && activeFile.path === node.path)
+        setActiveFile({ path: newPath, id: node.id });
     } catch (err) {
       if (axios.isAxiosError(err)) console.error(err.response?.data?.message);
     }
@@ -121,9 +111,8 @@ function IDEShell({ children, projectId, projectTitle }: IDELayoutProps) {
       await apiFile.deleteFile(Number(projectId), node.id);
       const tree = await apiFile.getFileTree(Number(projectId));
       setFiles(tree);
-      if (activeFile === node.path) {
-        setActiveFile(undefined);
-        setFileContent("");
+      if (activeFile && activeFile.path === node.path) {
+        setActiveFile(null);
       }
     } catch (err) {
       if (axios.isAxiosError(err)) console.error(err.response?.data?.message);
@@ -213,6 +202,7 @@ function IDEShell({ children, projectId, projectTitle }: IDELayoutProps) {
         >
           {activePanel === "files" && (
             <FileTree
+              projectId={projectId}
               loading={filesLoading}
               files={files}
               activeFile={activeFile}
@@ -402,6 +392,7 @@ export default function IDELayout({
 
   return (
     <IDEProvider
+      projectId={projectId}
       files={files}
       filesLoading={filesLoading}
       isGithub={isGithub}

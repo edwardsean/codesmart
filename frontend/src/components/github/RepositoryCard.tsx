@@ -1,6 +1,6 @@
 import { Check } from "lucide-react";
-import { Repository } from "@/types/entity";
-import { getLanguageColor } from "@/lib/utils";
+import { Repository } from "@/types/repository.types";
+import { getLanguageColor } from "@/utils/utils";
 
 interface RepositoryCardProps {
   repo: Repository;

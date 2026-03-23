@@ -110,6 +110,7 @@ func (h *AuthHandler) handleMe(w http.ResponseWriter, r *http.Request) {
 		Username:  user.Username,
 		CreatedAt: user.CreatedAt,
 		GithubID:  user.GitHubID,
+		XPPoints:  user.XPPoints,
 	}
 
 	response.WriteJSON(w, http.StatusOK, map[string]any{"user": safeUser})

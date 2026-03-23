@@ -4,7 +4,7 @@ import Link from "next/link";
 import { LogOut } from "lucide-react";
 import useAxiosPrivate from "@/hooks/useAxiosPrivate";
 import axios from "axios";
-import { useAuthStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/auth.store";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import { useState } from "react";
 import { Skeleton } from "@/components/ui/Skeleton";

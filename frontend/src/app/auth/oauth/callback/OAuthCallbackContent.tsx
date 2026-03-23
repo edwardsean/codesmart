@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axios from "@/lib/api";
-import { useAuthStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/auth.store";
 import LoadingScreen from "@/components/ui/Loading";
 
 export default function OAuthCallbackContent({
