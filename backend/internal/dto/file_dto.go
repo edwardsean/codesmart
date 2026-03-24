@@ -33,6 +33,17 @@ type UpdateFilePayload struct {
 	Language domain.Language `json:"language"`
 }
 
+type FileTreeResult struct {
+	Tree      []FileTreeItem `json:"tree"`
+	Truncated bool           `json:"truncated"`
+}
+
+type FileTreeItem struct {
+	Path string `json:"path"`
+	Type string `json:"type"` // "blob" = file, "tree" = dir
+	Size int    `json:"size"`
+}
+
 func ToFileContentDTO(f *domain.ProjectFile) *FileContentDTO {
 	return &FileContentDTO{
 		ID:      f.ID,
