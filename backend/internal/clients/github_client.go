@@ -1,4 +1,4 @@
-package github
+package clients
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/edwardsean/codesmart/backend/internal/domain"
+	"github.com/edwardsean/codesmart/backend/internal/dto"
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
 	"github.com/edwardsean/codesmart/backend/pkg/utils"
 )
@@ -20,17 +21,6 @@ type Client struct {
 
 func NewGithubClient(httpClient *http.Client) *Client {
 	return &Client{httpClient: httpClient}
-}
-
-type FileTreeResult struct {
-	Tree      []FileTreeItem `json:"tree"`
-	Truncated bool           `json:"truncated"`
-}
-
-type FileTreeItem struct {
-	Path string `json:"path"`
-	Type string `json:"type"` // "blob" = file, "tree" = dir
-	Size int    `json:"size"`
 }
 
 func (c *Client) GetFileContent(ctx context.Context, token, owner, repo, path string) (string, error) {
@@ -76,7 +66,7 @@ func (c *Client) GetFileContent(ctx context.Context, token, owner, repo, path st
 	return string(decoded), nil
 }
 
-func (c *Client) GetFileTree(ctx context.Context, token, owner, repo string) (*FileTreeResult, error) {
+func (c *Client) GetFileTree(ctx context.Context, token, owner, repo string) (*dto.FileTreeResult, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/git/trees/HEAD?recursive=1", owner, repo)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -95,7 +85,7 @@ func (c *Client) GetFileTree(ctx context.Context, token, owner, repo string) (*F
 		return nil, fmt.Errorf("github API error: %d", resp.StatusCode)
 	}
 
-	var result FileTreeResult
+	var result dto.FileTreeResult
 
 	if err := utils.ParseJson(resp.Body, &result); err != nil {
 		return nil, err

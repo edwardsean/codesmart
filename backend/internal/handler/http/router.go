@@ -6,7 +6,7 @@ import (
 
 	"net/http"
 
-	githubClient "github.com/edwardsean/codesmart/backend/internal/clients/github"
+	"github.com/edwardsean/codesmart/backend/internal/clients"
 	"github.com/edwardsean/codesmart/backend/internal/config"
 	"github.com/edwardsean/codesmart/backend/internal/repository/postgres"
 	"github.com/edwardsean/codesmart/backend/internal/repository/redis"
@@ -45,7 +45,7 @@ func (s *APIServer) Run() error {
 	subrouter := router.PathPrefix("/api/v1").Subrouter() //groups routes under api/v1
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
-	githubClient := githubClient.NewGithubClient(httpClient)
+	githubClient := clients.NewGithubClient(httpClient)
 
 	redisClient := redis.NewRedisClient(config.Envs.RedisAddr)
 	userRepository := postgres.PostgreNewUserStore(s.db) //a new store instance using gormDB, if want to use Redis make another store, the NewStore should then be name PostgreNewStore
