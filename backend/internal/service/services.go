@@ -9,6 +9,7 @@ import (
 
 type UserService interface {
 	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
+	GetUserByID(ctx context.Context, id int) (*domain.User, error)
 }
 
 type GithubService interface {
@@ -28,6 +29,8 @@ type AuthService interface {
 	Logout(ctx context.Context, refreshToken string) error
 	ValidateRefreshToken(ctx context.Context, refreshToken string) (*domain.User, error)
 	GetUserFromToken(ctx context.Context, token string) (*domain.User, error)
+	CreateWSTicket(ctx context.Context, ticket string, userId int) error
+	ExchangeWSTicket(ctx context.Context, ticket string) (int, error)
 }
 
 type ProjectService interface {

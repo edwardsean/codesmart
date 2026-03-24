@@ -1,4 +1,3 @@
-// app/dashboard/(ide)/projects/[id]/page.tsx
 "use client";
 
 import dynamic from "next/dynamic";
@@ -9,7 +8,8 @@ import {
   useUpdateFileContent,
 } from "@/hooks/query/useFileContent";
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import TerminalPanel from "@/components/ide/TerminalPanel";
 
 const CodeEditor = dynamic(() => import("@/components/ide/CodeEditor"), {
   ssr: false,
@@ -54,6 +54,17 @@ export default function ProjectCodePage() {
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
+  const [terminalOpen, setTerminalOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "`") {
+        setTerminalOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   async function handleSave() {
     if (!activeFile || !activeFile.path || !fileData?.id) return; //if no active file or not in database
@@ -181,6 +192,12 @@ export default function ProjectCodePage() {
           )}
         </div>
 
+        {terminalOpen && (
+          <TerminalPanel
+            projectId={projectId}
+            onClose={() => setTerminalOpen(false)}
+          />
+        )}
         {/* Status bar */}
         {activeFile && (
           <div

@@ -22,3 +22,12 @@ func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*domain
 	}
 	return user, nil
 }
+
+func (s *UserService) GetUserByID(ctx context.Context, id int) (*domain.User, error) {
+	user, err := s.userRepo.GetUserByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}

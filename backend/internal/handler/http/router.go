@@ -64,11 +64,13 @@ func (s *APIServer) Run() error {
 	githubHandler := NewGithubHandler(githubService)
 	projectHandler := NewProjectHandler(projectService)
 	projectFileHandler := NewFileHandler(projectFileService)
+	terminalHander := NewTerminalHandler(authService, userService)
 
 	githubHandler.RegisterRoutes(subrouter, authService)
 	authHandler.RegisterRoutes(subrouter)
 	projectHandler.RegisterRoutes(subrouter, authService) //auth service for middleware
 	projectFileHandler.RegisterRoutes(subrouter, authService)
+	terminalHander.RegisterRoutes(subrouter)
 	log.Println("Listening on", s.addr)
 
 	return http.ListenAndServe(s.addr, router) //starts the HTTP server on s.addr and uses the router to handle requests.

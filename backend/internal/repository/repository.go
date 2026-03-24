@@ -24,6 +24,8 @@ type TokenRepository interface {
 	ExchangeOAuthCode(ctx context.Context, code string) (*redis.OAuthCodeData, error)
 	StoreConnectCode(ctx context.Context, code string, data *redis.ConnectCodeData) error
 	ExchangeConnectCode(ctx context.Context, connect_code string) (*redis.ConnectCodeData, error)
+	StoreWSTicket(ctx context.Context, ticket string, userId int) error
+	ExchangeWSTicket(ctx context.Context, ticket string) (int, error)
 }
 
 type ProjectRepository interface {

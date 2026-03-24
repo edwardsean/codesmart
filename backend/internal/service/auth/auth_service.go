@@ -162,3 +162,22 @@ func (s *AuthService) GetUserFromToken(ctx context.Context, token string) (*doma
 
 	return s.userRepo.GetUserByID(ctx, userID)
 }
+
+func (s *AuthService) CreateWSTicket(ctx context.Context, ticket string, userId int) error {
+	//store in redis, ticket -> UserID, ttl 30 seconds
+	err := s.tokenRepo.StoreWSTicket(ctx, ticket, userId)
+	if err != nil {
+		return errors.NewError("failed to create ticket", http.StatusInternalServerError)
+	}
+
+	return nil
+}
+
+func (s *AuthService) ExchangeWSTicket(ctx context.Context, ticket string) (int, error) {
+	userId, err := s.tokenRepo.ExchangeWSTicket(ctx, ticket)
+	if err != nil {
+		return 0, err
+	}
+
+	return userId, nil
+}

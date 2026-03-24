@@ -14,6 +14,7 @@ import (
 	"github.com/edwardsean/codesmart/backend/pkg/jwt"
 	"github.com/edwardsean/codesmart/backend/pkg/sanitize"
 	"github.com/edwardsean/codesmart/backend/pkg/utils"
+	"github.com/google/uuid"
 
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
 	"github.com/edwardsean/codesmart/backend/pkg/response"
@@ -57,6 +58,24 @@ func (h *AuthHandler) RegisterRoutes(router *mux.Router) {
 	authrouter.HandleFunc("/register", h.handleRegister).Methods("POST")
 
 	authrouter.HandleFunc("/logout", h.handleLogout).Methods("POST")
+
+	authrouter.HandleFunc("/ws-ticket", authMiddleware(h.handleCreateWSTicket)).Methods("POST")
+}
+
+func (h *AuthHandler) handleCreateWSTicket(w http.ResponseWriter, r *http.Request) {
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		response.WriteError(w, errors.ErrInvalidCredentials)
+		return
+	}
+
+	ticket := uuid.New().String()
+
+	if err := h.authService.CreateWSTicket(r.Context(), ticket, user.ID); err != nil {
+		response.WriteError(w, err)
+	}
+
+	response.WriteJSON(w, http.StatusOK, map[string]string{"ticket": ticket})
 }
 
 func (h *AuthHandler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {

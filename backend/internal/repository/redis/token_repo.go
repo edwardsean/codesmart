@@ -3,9 +3,12 @@ package redis
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/edwardsean/codesmart/backend/internal/domain"
+	"github.com/edwardsean/codesmart/backend/pkg/errors"
 )
 
 type TokenRepository struct {
@@ -86,4 +89,21 @@ func (r *TokenRepository) ExchangeConnectCode(ctx context.Context, connect_code 
 	}
 
 	return &data, nil
+}
+
+func (r *TokenRepository) StoreWSTicket(ctx context.Context, ticket string, userId int) error {
+	return r.client.client.Set(ctx, "ws_ticket:"+ticket, userId, 30*time.Second).Err()
+}
+
+func (r *TokenRepository) ExchangeWSTicket(ctx context.Context, ticket string) (int, error) {
+	val, err := r.client.client.GetDel(ctx, "ws_ticket:"+ticket).Result()
+	if err != nil {
+		return 0, errors.NewError("invalid or expired ticket", http.StatusUnauthorized)
+	}
+	userID, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, errors.NewError("invalid ticket data", http.StatusInternalServerError)
+	}
+
+	return userID, nil
 }
