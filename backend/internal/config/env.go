@@ -20,12 +20,13 @@ type Config struct {
 	FrontendOrigin string
 	EncryptionKey  string
 	RedisAddr      string
+	WorkSpaceRoot  string
 }
 
 var Envs = initConfig()
 
 func initConfig() *Config {
-	godotenv.Load("../../.env")
+	godotenv.Load(".env")
 	return &Config{
 		DBHost:         getEnv("DB_HOST", "localhost"),
 		DBUser:         getEnv("DB_USER", "root"),
@@ -39,6 +40,7 @@ func initConfig() *Config {
 		FrontendOrigin: getEnv("FRONTEND_ORIGIN", "http://localhost:3000"),
 		EncryptionKey:  getEnv("ENCRYPTION_KEY", "not-found"),
 		RedisAddr:      getEnv("REDIS_ADDR", "not-found"),
+		WorkSpaceRoot:  getEnv("WORKSPACE_ROOT", "./workspaces"),
 	}
 }
 

@@ -79,3 +79,7 @@ Thumbs.db
 
 
 *.private-key.pem
+
+
+#workspace
+backend/workspaces/

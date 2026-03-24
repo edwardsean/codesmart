@@ -44,6 +44,6 @@ type FileService interface {
 	GetFileTree(ctx context.Context, projectId int, userId int) ([]dto.FileNodeDTO, error)
 	GetFileContent(ctx context.Context, projectId int, userId int, path string) (*dto.FileContentDTO, error)
 	CreateFile(ctx context.Context, projectId int, userId int, payload dto.CreateFilePayload) (*dto.FileContentDTO, error)
-	UpdateFile(ctx context.Context, projectId, userId, fileId int, payload dto.UpdateFilePayload) error
-	DeleteFile(ctx context.Context, projectId, userId, fileId int) error
+	UpdateFile(ctx context.Context, projectId, userId int, payload dto.UpdateFilePayload) error
+	DeleteFile(ctx context.Context, projectId, userId int, path string) error
 }

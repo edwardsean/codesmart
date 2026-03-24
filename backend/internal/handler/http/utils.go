@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/edwardsean/codesmart/backend/pkg/errors"
 	"github.com/gorilla/mux"
 )
 
@@ -16,7 +17,12 @@ func parseProjectIDParam(r *http.Request) (int, error) {
 	vars := mux.Vars(r)
 	return strconv.Atoi(vars["projectId"])
 }
-func parseFileIDParam(r *http.Request) (int, error) {
+
+func parseFilePathParam(r *http.Request) (string, error) {
 	vars := mux.Vars(r)
-	return strconv.Atoi(vars["fileId"])
+	path := vars["path"]
+	if path == "" {
+		return "", errors.NewError("path parameter is required", http.StatusBadRequest)
+	}
+	return path, nil
 }

@@ -32,8 +32,8 @@ func (h *FileHandler) RegisterRoutes(router *mux.Router, authService service.Aut
 	r.HandleFunc("", h.handleGetFileTree).Methods("GET")
 	r.HandleFunc("/content", h.handleGetFileContent).Methods("GET")
 	r.HandleFunc("", h.handleCreateFile).Methods("POST")
-	r.HandleFunc("/{fileId}", h.handleUpdateFile).Methods("PUT")
-	r.HandleFunc("/{fileId}", h.handleDeleteFile).Methods("DELETE")
+	r.HandleFunc("", h.handleUpdateFile).Methods("PUT")
+	r.HandleFunc("/{path}", h.handleDeleteFile).Methods("DELETE")
 }
 
 func (h *FileHandler) handleGetFileTree(w http.ResponseWriter, r *http.Request) {
@@ -129,19 +129,13 @@ func (h *FileHandler) handleUpdateFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fileId, err := parseFileIDParam(r)
-	if err != nil {
-		response.WriteError(w, errors.NewError("invalid file id", http.StatusBadRequest))
-		return
-	}
-
 	var payload dto.UpdateFilePayload
 	if err := utils.ParseJson(r.Body, &payload); err != nil {
 		response.WriteError(w, errors.NewError(err.Error(), http.StatusBadRequest))
 		return
 	}
 
-	if err := h.fileService.UpdateFile(r.Context(), projectId, user.ID, fileId, payload); err != nil {
+	if err := h.fileService.UpdateFile(r.Context(), projectId, user.ID, payload); err != nil {
 		response.WriteError(w, err)
 		return
 	}
@@ -162,13 +156,13 @@ func (h *FileHandler) handleDeleteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fileId, err := parseFileIDParam(r)
+	path, err := parseFilePathParam(r)
 	if err != nil {
-		response.WriteError(w, errors.NewError("invalid file id", http.StatusBadRequest))
+		response.WriteError(w, err)
 		return
 	}
 
-	if err := h.fileService.DeleteFile(r.Context(), projectId, user.ID, fileId); err != nil {
+	if err := h.fileService.DeleteFile(r.Context(), projectId, user.ID, path); err != nil {
 		response.WriteError(w, err)
 		return
 	}

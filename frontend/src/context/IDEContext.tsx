@@ -3,11 +3,6 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 import { FileNode } from "@/types/project.file.types";
 
-export interface ActiveFile {
-  id: number;
-  path: string;
-}
-
 interface IDEContextValue {
   //project id
   projectId: string;
@@ -17,18 +12,18 @@ interface IDEContextValue {
   isGithub: boolean;
 
   // active file
-  activeFile: ActiveFile | null;
+  activeFile: string | null;
 
   //openTabs
-  openTabs: ActiveFile[];
-  openFile: (activeFile: ActiveFile) => void;
+  openTabs: string[];
+  openFile: (path: string) => void;
   closeTab: (path: string) => void;
   editedContent: Record<string, string>;
   setEditedContent: (path: string, content: string) => void;
   clearEditedContent: (path: string) => void;
 
   // actions
-  setActiveFile: (activeFile: ActiveFile | null) => void;
+  setActiveFile: (path: string) => void;
   setFiles: (files: FileNode[]) => void;
 }
 
@@ -49,34 +44,31 @@ export function IDEProvider({
   isGithub: boolean;
   onSetFiles: (files: FileNode[]) => void;
 }) {
-  const [activeFile, setActiveFile] = useState<ActiveFile | null>(null); //takes the path
-  const [openTabs, setOpenTabs] = useState<ActiveFile[]>([]);
+  const [activeFile, setActiveFile] = useState<string | null>(null); //takes the path
+  const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [editedContent, setEditedContentMap] = useState<Record<string, string>>(
     {},
   );
 
-  function openFile(activeFile: ActiveFile) {
-    const isAlreadyOpen = openTabs.some((tab) => tab.path === activeFile.path);
+  function openFile(path: string) {
+    const isAlreadyOpen = openTabs.some((p) => p === path);
 
     if (!isAlreadyOpen) {
-      setOpenTabs((prev) => [
-        ...prev,
-        { path: activeFile.path, id: activeFile.id },
-      ]);
+      setOpenTabs((prev) => [...prev, path]);
     }
-    setActiveFile({ path: activeFile.path, id: activeFile.id });
+    setActiveFile(path);
   }
 
   function closeTab(path: string) {
     setOpenTabs((prev) => {
-      const tabToClose = prev.find((p) => p.path === path);
+      const tabToClose = prev.find((p) => p === path);
       if (!tabToClose) return prev;
 
-      const next = prev.filter((tab) => tab.path !== path);
+      const next = prev.filter((p) => p !== path);
 
-      if (activeFile && path === activeFile.path) {
-        const idx = prev.findIndex((tab) => tab.path === path);
-        const nextActive = next[idx] ?? next[idx - 1] ?? null;
+      if (path === activeFile) {
+        const idx = prev.findIndex((p) => p === path);
+        const nextActive = next[idx] ?? next[idx - 1];
         setActiveFile(nextActive);
       }
 

@@ -68,7 +68,7 @@ function IDEShell({ children, projectId, projectTitle }: IDELayoutProps) {
 
   async function handleFileSelect(node: FileNode) {
     if (node.type === "dir") return;
-    openFile(node);
+    openFile(node.path);
   }
 
   async function handleCreateFile(parentPath: string, isDir: boolean) {
@@ -89,30 +89,29 @@ function IDEShell({ children, projectId, projectTitle }: IDELayoutProps) {
   }
 
   async function handleRename(node: FileNode, newName: string) {
-    if (!node.id) return;
+    if (!node) return;
     const parts = node.path.split("/");
     parts[parts.length - 1] = newName;
     const newPath = parts.join("/");
     try {
-      await apiFile.updateFile(Number(projectId), node.id, { path: newPath });
+      await apiFile.updateFile(Number(projectId), { path: newPath });
       const tree = await apiFile.getFileTree(Number(projectId));
       setFiles(tree);
-      if (activeFile && activeFile.path === node.path)
-        setActiveFile({ path: newPath, id: node.id });
+      if (activeFile && activeFile === node.path) setActiveFile(newPath);
     } catch (err) {
       if (axios.isAxiosError(err)) console.error(err.response?.data?.message);
     }
   }
 
   async function handleDelete(node: FileNode) {
-    if (!node.id) return;
+    if (!node) return;
     if (!confirm(`Delete ${node.name}?`)) return;
     try {
-      await apiFile.deleteFile(Number(projectId), node.id);
+      await apiFile.deleteFile(Number(projectId), node.path);
       const tree = await apiFile.getFileTree(Number(projectId));
       setFiles(tree);
-      if (activeFile && activeFile.path === node.path) {
-        setActiveFile(null);
+      if (activeFile && activeFile === node.path) {
+        setActiveFile("");
       }
     } catch (err) {
       if (axios.isAxiosError(err)) console.error(err.response?.data?.message);
@@ -374,6 +373,7 @@ export default function IDELayout({
       setFilesLoading(true);
       try {
         const tree = await apiFile.getFileTree(Number(projectId));
+        console.log("tree: ", tree);
         setFiles(tree);
       } catch (err) {
         if (axios.isAxiosError(err)) {

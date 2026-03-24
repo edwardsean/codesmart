@@ -5,16 +5,16 @@ import { useAuthStore } from "@/stores/auth.store";
 import { useQueryClient } from "@tanstack/react-query";
 
 const FILE_CONTENT_KEYS = {
-    content: (projectId: string, path: string | undefined, fileId: number | undefined) => ["file", projectId, fileId, path] as const,
+    content: (projectId: string, path: string) => ["file", projectId, path] as const,
 }
 
-export function useFileContent(projectId: string, path: string | undefined, fileId: number | undefined) {
+export function useFileContent(projectId: string, path: string) {
     const api = useAxiosPrivate();
     const { _hasHydrated, account } = useAuthStore();
 
     return useQuery({
-        queryKey: FILE_CONTENT_KEYS.content(projectId, path, fileId),
-        queryFn: () => fileService(api).getFileContent(Number(projectId), path!),
+        queryKey: FILE_CONTENT_KEYS.content(projectId, path),
+        queryFn: () => fileService(api).getFileContent(Number(projectId), path),
         enabled: _hasHydrated && !!account?.accessToken && !!path, //only fetch when a path is selected
         staleTime: 1000 * 60 * 5,
     });
@@ -24,9 +24,9 @@ export function usePrefetchFileContent(projectId: string) {
     const api = useAxiosPrivate()
     const queryClient = useQueryClient()
 
-    return (path: string, fileId: number) => {
+    return (path: string) => {
         queryClient.prefetchQuery({
-        queryKey: FILE_CONTENT_KEYS.content(projectId, path, fileId),
+        queryKey: FILE_CONTENT_KEYS.content(projectId, path),
         queryFn: () => fileService(api).getFileContent(Number(projectId), path),
         staleTime: 1000 * 60 * 5,
     });
@@ -38,7 +38,7 @@ export function useUpdateFileContent() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({projectId, fileId, payload}: {projectId: string, fileId: number, payload: UpdateFilePayload}) => fileService(api).updateFile(Number(projectId), fileId, payload),
-        onSuccess: (data, { projectId, fileId, payload}) => queryClient.invalidateQueries({queryKey: FILE_CONTENT_KEYS.content(projectId, payload.path, fileId)})
+        mutationFn: ({projectId, payload}: {projectId: string, payload: UpdateFilePayload}) => fileService(api).updateFile(Number(projectId), payload),
+        onSuccess: (data, { projectId, payload}) => queryClient.invalidateQueries({queryKey: FILE_CONTENT_KEYS.content(projectId, payload.path)})
     })
 }

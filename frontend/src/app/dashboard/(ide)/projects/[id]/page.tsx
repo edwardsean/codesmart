@@ -34,22 +34,21 @@ export default function ProjectCodePage() {
 
   const { data: fileData, isLoading: contentLoading } = useFileContent(
     projectId,
-    activeFile?.path,
-    activeFile?.id,
+    activeFile ?? "",
   );
-  console.log(`file for ${activeFile?.path}: `, fileData);
+  console.log(`file for ${activeFile}: `, fileData);
   const { mutate: updateFile } = useUpdateFileContent();
 
   //to show in editor either unsaved local edits (typed but not saved) or server content from react query
   const displayContent = activeFile
-    ? (editedContent[activeFile.path] ?? fileData?.content ?? "")
+    ? (editedContent[activeFile] ?? fileData?.content ?? "")
     : "";
 
   //unsaved if the active file now is edited and not the same as from the react query
   const isUnsaved =
     activeFile &&
-    editedContent[activeFile.path] !== undefined &&
-    editedContent[activeFile.path] !== fileData?.content;
+    editedContent[activeFile] !== undefined &&
+    editedContent[activeFile] !== fileData?.content;
 
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
@@ -67,20 +66,19 @@ export default function ProjectCodePage() {
   }, []);
 
   async function handleSave() {
-    if (!activeFile || !activeFile.path || !fileData?.id) return; //if no active file or not in database
-    const content = editedContent[activeFile.path];
+    if (!activeFile || !fileData) return; //if no active file or not in workspace
+    const content = editedContent[activeFile];
     if (content === undefined) return; //nothing to save
 
     setSaveStatus("saving");
     updateFile(
       {
         projectId,
-        fileId: activeFile.id,
-        payload: { content, path: activeFile.path },
+        payload: { content, path: activeFile },
       },
       {
         onSuccess: () => {
-          clearEditedContent(activeFile.path);
+          clearEditedContent(activeFile);
           setSaveStatus("saved");
           setTimeout(() => setSaveStatus("idle"), 2000);
         },
@@ -101,14 +99,14 @@ export default function ProjectCodePage() {
             className="flex items-center border-b border-black/[0.06] dark:border-white/[0.06]
             bg-gray-50 dark:bg-[#252526] flex-shrink-0 h-8 overflow-x-auto"
           >
-            {openTabs.map((file) => {
-              const isActive = file.path === activeFile?.path;
-              const isDirty = file.path in editedContent;
+            {openTabs.map((path) => {
+              const isActive = path === activeFile;
+              const isDirty = path in editedContent;
 
               return (
                 <div
-                  key={file.path}
-                  onClick={() => openFile(file)}
+                  key={path}
+                  onClick={() => openFile(path)}
                   className={`group flex items-center gap-2 h-full px-3 border-r
                     border-black/[0.06] dark:border-white/[0.06]
                     cursor-pointer flex-shrink-0 transition-colors ${
@@ -118,7 +116,7 @@ export default function ProjectCodePage() {
                     }`}
                 >
                   <span className="text-xs font-mono">
-                    {file.path.split("/").pop()}
+                    {path.split("/").pop()}
                   </span>
 
                   <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
@@ -127,14 +125,14 @@ export default function ProjectCodePage() {
                         className="w-1.5 h-1.5 rounded-full bg-[#dc503c]"
                         onClick={(e) => {
                           e.stopPropagation();
-                          closeTab(file.path);
+                          closeTab(path);
                         }}
                       />
                     ) : (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          closeTab(file.path);
+                          closeTab(path);
                         }}
                         className="opacity-0 group-hover:opacity-100 transition-opacity
                           text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200"
@@ -185,8 +183,8 @@ export default function ProjectCodePage() {
           ) : (
             <CodeEditor
               value={displayContent}
-              path={activeFile.path}
-              onChange={(val) => setEditedContent(activeFile.path, val)}
+              path={activeFile}
+              onChange={(val) => setEditedContent(activeFile, val)}
               onSave={handleSave}
             />
           )}
@@ -204,7 +202,7 @@ export default function ProjectCodePage() {
             className="h-6 flex-shrink-0 flex items-center justify-between px-4
     bg-[#dc503c] text-white text-xs font-mono"
           >
-            <span>{activeFile.path.split(".").pop()}</span>
+            <span>{activeFile.split(".").pop()}</span>
 
             <span className="flex items-center gap-1.5 transition-all">
               {saveStatus === "saving" && (

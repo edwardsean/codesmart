@@ -10,7 +10,7 @@ export const useInitAuth = () => {
     if (!_hasHydrated) return;
 
     console.log("account: ", account);
-    console.log("localStorage:", localStorage.getItem("auth-storage"));
+
     if (account?.user && !account?.accessToken) refresh();
   }, [_hasHydrated]);
 };

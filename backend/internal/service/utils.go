@@ -42,3 +42,29 @@ func DetectLanguage(path string) string {
 	}
 	return ""
 }
+
+func ShouldSkipFile(path string) bool {
+	skipDirs := []string{
+		"node_modules/", ".git/", "vendor/", ".next/",
+		"dist/", "build/", "__pycache__/", ".venv/",
+	}
+	for _, dir := range skipDirs {
+		if strings.HasPrefix(path, dir) || strings.Contains(path, "/"+dir) {
+			return true
+		}
+	}
+
+	skipExts := []string{
+		".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg",
+		".woff", ".woff2", ".ttf", ".eot",
+		".zip", ".tar", ".gz", ".exe", ".bin",
+		".lock", // package-lock.json is fine but yarn.lock/pnpm-lock is huge
+	}
+	for _, ext := range skipExts {
+		if strings.HasSuffix(strings.ToLower(path), ext) {
+			return true
+		}
+	}
+
+	return false
+}

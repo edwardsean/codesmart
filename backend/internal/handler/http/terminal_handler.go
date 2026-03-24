@@ -2,13 +2,16 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/creack/pty"
+	"github.com/edwardsean/codesmart/backend/internal/config"
 	"github.com/edwardsean/codesmart/backend/internal/service"
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
 	"github.com/edwardsean/codesmart/backend/pkg/response"
@@ -25,12 +28,13 @@ var upgrader = websocket.Upgrader{
 }
 
 type TerminalHandler struct {
-	authService service.AuthService
-	userService service.UserService
+	authService   service.AuthService
+	userService   service.UserService
+	workspaceRoot string
 }
 
 func NewTerminalHandler(authService service.AuthService, userService service.UserService) *TerminalHandler {
-	return &TerminalHandler{authService: authService, userService: userService}
+	return &TerminalHandler{authService: authService, userService: userService, workspaceRoot: config.Envs.WorkSpaceRoot}
 }
 
 func (h *TerminalHandler) RegisterRoutes(router *mux.Router) {
@@ -61,6 +65,9 @@ func (h *TerminalHandler) handleTerminal(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	projectId, _ := parseProjectIDParam(r)
+	workspacePath := filepath.Join(h.workspaceRoot, fmt.Sprintf("user_%d", user.ID), fmt.Sprintf("project_%d", projectId))
+
 	log.Printf("Terminal opened for user %d", user.ID)
 
 	//upgrade HTTP connection to Websocket, this is the handshake of HTTP becomes websocket
@@ -70,13 +77,25 @@ func (h *TerminalHandler) handleTerminal(w http.ResponseWriter, r *http.Request)
 	}
 	defer conn.Close()
 
+	//find workspace if exists
+	if _, err := os.Stat(workspacePath); os.IsNotExist(err) {
+		conn.WriteMessage(websocket.TextMessage, []byte("workspace not found\r\n"))
+		return
+	}
+
 	//spawn a bash process with a PTY
 	cmd := exec.Command("/bin/bash")
-
+	cmd.Dir = workspacePath
 	//set environment variables for the shell
 	cmd.Env = append(os.Environ(),
-		"TERM=xterm-256color", //tell programs we support colors
-		"HOME=/tmp",           //sandbox the home directory
+		"TERM=xterm-256color",                 //tell programs we support colors
+		fmt.Sprintf("HOME=%s", workspacePath), // HOME = project dir
+		fmt.Sprintf("PROJECT_ID=%d", projectId),
+		// git config so commits work
+		fmt.Sprintf("GIT_AUTHOR_NAME=%s", user.Username),
+		fmt.Sprintf("GIT_AUTHOR_EMAIL=%s", user.Email),
+		fmt.Sprintf("GIT_COMMITTER_NAME=%s", user.Username),
+		fmt.Sprintf("GIT_COMMITTER_EMAIL=%s", user.Email),
 	)
 
 	//start the command with a PTY attached

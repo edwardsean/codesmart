@@ -11,43 +11,98 @@ interface CreateFilePayload {
 }
 
 export interface UpdateFilePayload {
-  path?: string;    // rename
+  path: string;    // rename
   content?: string; // save
 }
 
 // converts flat list from API into nested tree structure
-export function buildTree(flat: FileNode[]): FileNode[] {
+export function buildTree(flat: FileNode[]): FileNode[]{
   const root: FileNode[] = [];
   const map = new Map<string, FileNode>();
 
-  // sort so dirs come before files, then alphabetically
-  const sorted = [...flat].sort((a, b) => {
-    if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-    return a.path.localeCompare(b.path);
-  });
-
-  for (const node of sorted) {
-    const parts = node.path.split("/");
-    if (parts.length === 1) {
-      root.push(node);
-      map.set(node.path, node);
-    } else {
-      const parentPath = parts.slice(0, -1).join("/");
-      const parent = map.get(parentPath);
-      if (parent) {
-        if (!parent.children) parent.children = [];
-        parent.children.push(node);
-      }
-      map.set(node.path, node);
-    }
+  for (const node of flat) { //for each node, make an object filenode, with children initialized to []
+    map.set(node.path, {
+      ...node,
+      children: []
+    })
   }
 
+  //build parent-child relationships
+  for (const node of flat) {
+    const currentNode = map.get(node.path);
+    const lastSlashIndex = node.path.lastIndexOf("/");
+
+    if(currentNode) {
+      if (lastSlashIndex === -1) {
+        //no slash, this is a root node
+        root.push(currentNode);
+      } else  {
+        //has parent, get the parent path
+        const parentPath = node.path.substring(0, lastSlashIndex);
+        const parent = map.get(parentPath);
+
+        if(parent) {
+          parent.children!.push(currentNode);
+        } else {
+          root.push(currentNode); //shouldnt happen
+        }
+      }
+    }
+    
+  }
+
+//sort directories first, then files, alphabetically
+  const sortNodes = (nodes: FileNode[]) => {
+    nodes.sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === "dir" ? -1 : 1;
+      }
+
+      return a.name.localeCompare(b.name);
+    });
+
+    nodes.forEach(node => {
+      if (node.children && node.children.length > 0) {
+        sortNodes(node.children);
+      }
+    });
+  };
+
+  sortNodes(root);
   return root;
+
+
+
+  // // sort so dirs come before files, then alphabetically
+  // const sorted = [...flat].sort((a, b) => {
+  //   if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+  //   return a.path.localeCompare(b.path);
+  // });
+
+  // for (const node of sorted) {
+  //   const parts = node.path.split("/");
+  //   if (parts.length === 1) {
+  //     root.push(node);
+  //     map.set(node.path, node);
+  //   } else {
+  //     const parentPath = parts.slice(0, -1).join("/");
+  //     const parent = map.get(parentPath);
+  //     if (parent) {
+  //       if (!parent.children) parent.children = [];
+  //       parent.children.push(node);
+  //     }
+  //     map.set(node.path, node);
+  //   }
+  // }
+
+  // return root;
 }
+
 
 export const fileService = (api: AxiosInstance) => ({
   getFileTree: async (projectId: number): Promise<FileNode[]> => {
     const res = await api.get(`/api/projects/${projectId}/files`);
+    console.log("API RESPONSE: ", res.data);
     const flat: FileNode[] = res.data.files ?? [];
     return buildTree(flat);
   },
@@ -64,11 +119,11 @@ export const fileService = (api: AxiosInstance) => ({
     return res.data.file as FileContent;
   },
 
-  updateFile: async (projectId: number, fileId: number, payload: UpdateFilePayload): Promise<void> => {
-    await api.put(`/api/projects/${projectId}/files/${fileId}`, payload);
+  updateFile: async (projectId: number, payload: UpdateFilePayload): Promise<void> => {
+    await api.put(`/api/projects/${projectId}/files`, payload);
   },
 
-  deleteFile: async (projectId: number, fileId: number): Promise<void> => {
-    await api.delete(`/api/projects/${projectId}/files/${fileId}`);
+  deleteFile: async (projectId: number, path: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/files/${path}`);
   },
 });

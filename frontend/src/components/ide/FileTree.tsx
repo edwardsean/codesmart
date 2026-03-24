@@ -14,12 +14,11 @@ import {
 } from "lucide-react";
 import { FileNode } from "@/types/project.file.types";
 import { usePrefetchFileContent } from "@/hooks/query/useFileContent";
-import { ActiveFile } from "@/context/IDEContext";
 
 interface FileTreeProps {
   projectId: string;
   files: FileNode[];
-  activeFile?: ActiveFile | null;
+  activeFile?: string | null;
   projectTitle: string;
   isGithub?: boolean;
   loading: boolean;
@@ -62,7 +61,7 @@ function FileTreeNode({
   projectId: string;
   node: FileNode;
   depth: number;
-  activeFile?: ActiveFile | null;
+  activeFile?: string | null;
   isGithub?: boolean;
   onFileSelect: (n: FileNode) => void;
   onCreateFile?: (parentPath: string, isDir: boolean) => void;
@@ -74,7 +73,7 @@ function FileTreeNode({
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.name);
   const renameRef = useRef<HTMLInputElement>(null);
-  const isActive = activeFile && node.path === activeFile.path;
+  const isActive = activeFile && node.path === activeFile;
   const ext = getExt(node.name);
   const color = LANG_COLORS[ext] ?? "text-gray-400 dark:text-zinc-500";
   const prefetch = usePrefetchFileContent(projectId);
@@ -196,7 +195,7 @@ function FileTreeNode({
       }`}
       style={indent}
       onMouseEnter={() => {
-        if (node.type === "file") prefetch(node.path, node.id);
+        if (node.type === "file") prefetch(node.path);
       }}
       onClick={() => onFileSelect(node)}
       role="button"

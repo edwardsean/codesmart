@@ -7,14 +7,12 @@ import (
 )
 
 type FileNodeDTO struct {
-	ID   int    `json:"id"`
 	Path string `json:"path"`
 	Name string `json:"name"`
 	Type string `json:"type"` // "file" or "dir"
 }
 
 type FileContentDTO struct {
-	ID      int    `json:"id"`
 	Path    string `json:"path"`
 	Name    string `json:"name"`
 	Content string `json:"content"`
@@ -46,7 +44,6 @@ type FileTreeItem struct {
 
 func ToFileContentDTO(f *domain.ProjectFile) *FileContentDTO {
 	return &FileContentDTO{
-		ID:      f.ID,
 		Path:    f.FilePath,
 		Name:    getFileName(f.FilePath),
 		Content: f.Content,
