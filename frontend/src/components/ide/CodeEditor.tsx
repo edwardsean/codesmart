@@ -38,10 +38,18 @@ export default function CodeEditor({
 }: CodeEditorProps) {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const onSaveRef = useRef(onSave);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
     onSaveRef.current = onSave;
   }, [onSave]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const ext = path?.split(".").pop() ?? "";
   const monacoLang =
@@ -53,13 +61,19 @@ export default function CodeEditor({
       : true;
 
   const handleMount: OnMount = (editor, monacoInstance) => {
-    editorRef.current = editor;
-    editor.focus();
+    if (isMountedRef.current) {
+      editorRef.current = editor;
+      editor.focus();
 
-    editor.addCommand(
-      monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS,
-      () => onSaveRef.current?.(),
-    );
+      editor.addCommand(
+        monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS,
+        () => {
+          if (isMountedRef.current) {
+            onSaveRef.current?.();
+          }
+        },
+      );
+    }
   };
 
   return (
@@ -68,7 +82,11 @@ export default function CodeEditor({
       language={monacoLang}
       value={value}
       theme={isDark ? "vs-dark" : "light"}
-      onChange={(val) => onChange?.(val ?? "")}
+      onChange={(val) => {
+        if (isMountedRef.current) {
+          onChange?.(val ?? "");
+        }
+      }}
       onMount={handleMount}
       path={path}
       options={{

@@ -51,6 +51,10 @@ func (s *PostgresProjectStore) CreateProject(ctx context.Context, project *domai
 	return s.db.WithContext(ctx).Create(project).Error
 }
 
+func (s *PostgresProjectStore) UpdateProject(ctx context.Context, project *domain.Project) error {
+	return s.db.WithContext(ctx).Save(project).Error
+}
+
 func (s *PostgresProjectStore) DeleteProject(ctx context.Context, id int) error {
 	// soft delete, set status to archived instead of hard deleting
 	// this preserves the user's progress history

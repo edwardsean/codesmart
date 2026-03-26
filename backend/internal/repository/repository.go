@@ -33,6 +33,7 @@ type ProjectRepository interface {
 	GetProjectsByUserID(ctx context.Context, userId int) ([]domain.Project, error)
 	CreateProject(ctx context.Context, project *domain.Project) error
 	DeleteProject(ctx context.Context, projectId int) error
+	UpdateProject(ctx context.Context, project *domain.Project) error
 }
 
 type ProjectFileRepository interface {

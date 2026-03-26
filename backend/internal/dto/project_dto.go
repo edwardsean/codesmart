@@ -17,6 +17,7 @@ type CreateProjectPayload struct {
 
 type ProjectResponseDTO struct { //to get the project when click project
 	ID                 int                  `json:"id"`
+	UserID             int                  `json:"user_id"`
 	Title              string               `json:"title"`
 	Description        string               `json:"description"`
 	Language           domain.Language      `json:"language"`
@@ -28,6 +29,8 @@ type ProjectResponseDTO struct { //to get the project when click project
 	CompletedLevels    int                  `json:"completed_levels"`
 	ProgressPercentage int                  `json:"progress_percentage"`
 	Status             domain.ProjectStatus `json:"status"`
+	ContainerID        string               `json:"container_id"`
+	VolumeName         string               `json:"volume_name"`
 	CreatedAt          time.Time            `json:"created_at"`
 	UpdatedAt          time.Time            `json:"updated_at"`
 }
@@ -50,6 +53,7 @@ type ProjectListItemDTO struct { //for get projects in display (doesnt need desc
 func ToProjectResponseDTO(p *domain.Project) *ProjectResponseDTO {
 	return &ProjectResponseDTO{
 		ID:                 p.ID,
+		UserID:             p.UserID,
 		Title:              p.Title,
 		Description:        p.Description,
 		Language:           p.Language,
@@ -61,6 +65,8 @@ func ToProjectResponseDTO(p *domain.Project) *ProjectResponseDTO {
 		CompletedLevels:    p.CompletedLevels,
 		ProgressPercentage: p.ProgressPercentage,
 		Status:             p.Status,
+		ContainerID:        p.ContainerID,
+		VolumeName:         p.VolumeName,
 		CreatedAt:          p.CreatedAt,
 		UpdatedAt:          p.UpdatedAt,
 	}

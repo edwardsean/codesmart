@@ -2,37 +2,32 @@ package file
 
 import (
 	"context"
-	"fmt"
-	"io/fs"
-	"log"
 	"net/http"
-	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/edwardsean/codesmart/backend/internal/clients"
 	"github.com/edwardsean/codesmart/backend/internal/config"
+	"github.com/edwardsean/codesmart/backend/internal/container"
 	"github.com/edwardsean/codesmart/backend/internal/dto"
 	"github.com/edwardsean/codesmart/backend/internal/repository"
-	"github.com/edwardsean/codesmart/backend/internal/service"
 	"github.com/edwardsean/codesmart/backend/pkg/errors"
 )
 
 type FileService struct {
-	projectRepo   repository.ProjectRepository
-	fileRepo      repository.ProjectFileRepository
-	userRepo      repository.UserRepository
-	githubClient  clients.GithubClient
-	workSpaceRoot string
+	projectRepo      repository.ProjectRepository
+	userRepo         repository.UserRepository
+	githubClient     clients.GithubClient
+	containerManager *container.ContainerManager
+	workSpaceRoot    string
 }
 
-func NewFileService(projectRepo repository.ProjectRepository, fileRepo repository.ProjectFileRepository, userRepo repository.UserRepository, githubClient clients.GithubClient) *FileService {
+func NewFileService(projectRepo repository.ProjectRepository, userRepo repository.UserRepository, githubClient clients.GithubClient, containerManager *container.ContainerManager) *FileService {
 	return &FileService{
-		projectRepo:   projectRepo,
-		fileRepo:      fileRepo,
-		userRepo:      userRepo,
-		githubClient:  githubClient,
-		workSpaceRoot: config.Envs.WorkSpaceRoot,
+		projectRepo:      projectRepo,
+		containerManager: containerManager,
+		userRepo:         userRepo,
+		githubClient:     githubClient,
+		workSpaceRoot:    config.Envs.WorkSpaceRoot,
 	}
 }
 
@@ -47,46 +42,72 @@ func (s *FileService) GetFileTree(ctx context.Context, projectId int, userId int
 		return nil, errors.NewError("forbidden", http.StatusForbidden)
 	}
 
-	workspacePath := s.getWorkspacePath(userId, projectId)
+	//list files from container
+	fileInfo, err := s.containerManager.ListFiles(ctx, project.ContainerID)
+	if err != nil {
+		return nil, errors.NewError(err.Error(), http.StatusInternalServerError)
+	}
 
-	var nodes []dto.FileNodeDTO
-	err = filepath.WalkDir(workspacePath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+	nodes := make([]dto.FileNodeDTO, len(fileInfo))
+
+	for i, file := range fileInfo {
+		//file or dir
+		fileType := "file"
+		if file.IsDir {
+			fileType = "dir"
 		}
 
-		//skip .git folder
-		if d.IsDir() && d.Name() == ".git" {
-			return filepath.SkipDir
+		nodes[i] = dto.FileNodeDTO{
+			Path: file.Path,
+			Name: filepath.Base(file.Path),
+			Type: fileType, //TODO: how to detect if dir or file
 		}
+	}
 
-		//skip node modules, etc
-		if service.ShouldSkipFile(d.Name()) {
-			return filepath.SkipDir
-		}
+	return nodes, nil
 
-		relPath, _ := filepath.Rel(workspacePath, path)
-		if relPath == "." {
-			return nil
-		}
+	//convert to DTOs
 
-		nodeType := "file"
-		if d.IsDir() {
-			nodeType = "dir"
-		}
+	// workspacePath := s.getWorkspacePath(userId, projectId)
 
-		nodes = append(nodes, dto.FileNodeDTO{
-			Path: relPath,
-			Name: d.Name(),
-			Type: nodeType,
-		})
+	// var nodes []dto.FileNodeDTO
+	// err = filepath.WalkDir(workspacePath, func(path string, d fs.DirEntry, err error) error {
+	// 	if err != nil {
+	// 		return err
+	// 	}
 
-		return nil
-	})
+	// 	//skip .git folder
+	// 	if d.IsDir() && d.Name() == ".git" {
+	// 		return filepath.SkipDir
+	// 	}
 
-	log.Printf("file tree: %v", nodes)
-	log.Printf("file dir: %s", workspacePath)
-	return nodes, err
+	// 	//skip node modules, etc
+	// 	if service.ShouldSkipFile(d.Name()) {
+	// 		return filepath.SkipDir
+	// 	}
+
+	// 	relPath, _ := filepath.Rel(workspacePath, path)
+	// 	if relPath == "." {
+	// 		return nil
+	// 	}
+
+	// 	nodeType := "file"
+	// 	if d.IsDir() {
+	// 		nodeType = "dir"
+	// 	}
+
+	// 	nodes = append(nodes, dto.FileNodeDTO{
+	// 		Path: relPath,
+	// 		Name: d.Name(),
+	// 		Type: nodeType,
+	// 	})
+
+	// 	return nil
+	// })
+
+	// log.Printf("file tree: %v", nodes)
+	// log.Printf("file dir: %s", workspacePath)
+	// return nodes, err
 
 }
 
@@ -101,16 +122,9 @@ func (s *FileService) GetFileContent(ctx context.Context, projectId int, userId 
 		return nil, errors.NewError("forbidden", http.StatusForbidden)
 	}
 
-	workspacePath := s.getWorkspacePath(userId, projectId)
-	fullPath := filepath.Join(workspacePath, path)
-
-	if !strings.HasPrefix(fullPath, workspacePath) { //to prevent traversal attacks in full path
-		return nil, errors.NewError("invalid path", http.StatusBadRequest)
-	}
-
-	content, err := os.ReadFile(fullPath)
+	content, err := s.containerManager.CopyFileFromContainer(ctx, project.ContainerID, path)
 	if err != nil {
-		return nil, errors.NewError("file not found", http.StatusNotFound)
+		return nil, errors.NewError(err.Error(), http.StatusInternalServerError)
 	}
 
 	return &dto.FileContentDTO{
@@ -118,6 +132,23 @@ func (s *FileService) GetFileContent(ctx context.Context, projectId int, userId 
 		Name:    filepath.Base(path),
 		Content: string(content),
 	}, nil
+	// workspacePath := s.getWorkspacePath(userId, projectId)
+	// fullPath := filepath.Join(workspacePath, path)
+
+	// if !strings.HasPrefix(fullPath, workspacePath) { //to prevent traversal attacks in full path
+	// 	return nil, errors.NewError("invalid path", http.StatusBadRequest)
+	// }
+
+	// content, err := os.ReadFile(fullPath)
+	// if err != nil {
+	// 	return nil, errors.NewError("file not found", http.StatusNotFound)
+	// }
+
+	// return &dto.FileContentDTO{
+	// 	Path:    path,
+	// 	Name:    filepath.Base(path),
+	// 	Content: string(content),
+	// }, nil
 }
 
 func (s *FileService) CreateFile(ctx context.Context, projectId int, userId int, payload dto.CreateFilePayload) (*dto.FileContentDTO, error) {
@@ -131,47 +162,65 @@ func (s *FileService) CreateFile(ctx context.Context, projectId int, userId int,
 		return nil, errors.NewError("forbidden", http.StatusForbidden)
 	}
 
-	workspacePath := s.getWorkspacePath(userId, projectId)
-	fullPath := filepath.Join(workspacePath, payload.Path)
-
-	if !strings.HasPrefix(fullPath, workspacePath) {
-		return nil, errors.NewError("invalid path", http.StatusBadRequest)
-	}
-
-	if _, err := os.Stat(fullPath); err != nil {
-		return nil, errors.NewError("file already exists", http.StatusConflict)
-	}
-
 	if payload.IsDir {
-		//create directory
-		if err := os.MkdirAll(fullPath, 0755); err != nil {
-			return nil, errors.NewError("failed to create directory", http.StatusInternalServerError)
+		_, _, err := s.containerManager.ExecInContainer(ctx, project.ContainerID, []string{"mkdir", "-p", payload.Path})
+		if err != nil {
+			return nil, errors.NewError(err.Error(), http.StatusInternalServerError)
 		}
-
-		return &dto.FileContentDTO{
-			Path:    payload.Path,
-			Name:    filepath.Base(payload.Path),
-			Content: "",
-		}, nil
 	} else {
-		//create file
-		//create parent directory if doesnt exist
-		parentDir := filepath.Dir(fullPath)
-		if err := os.MkdirAll(parentDir, 0755); err != nil {
-			return nil, errors.NewError("faied to create parent directory", http.StatusInternalServerError)
+		err := s.containerManager.CopyFileToContainer(ctx, project.ContainerID, payload.Path, []byte(payload.Content))
+		if err != nil {
+			return nil, errors.NewError(err.Error(), http.StatusInternalServerError)
 		}
-
-		//create file
-		if err := os.WriteFile(fullPath, []byte(payload.Content), 0644); err != nil {
-			return nil, errors.NewError("failed to create file", http.StatusInternalServerError)
-		}
-
-		return &dto.FileContentDTO{
-			Path:    payload.Path,
-			Name:    filepath.Base(payload.Path),
-			Content: payload.Content,
-		}, nil
 	}
+
+	return &dto.FileContentDTO{
+		Path:    payload.Path,
+		Name:    filepath.Base(payload.Path),
+		Content: payload.Content,
+	}, nil
+
+	// workspacePath := s.getWorkspacePath(userId, projectId)
+	// fullPath := filepath.Join(workspacePath, payload.Path)
+
+	// if !strings.HasPrefix(fullPath, workspacePath) {
+	// 	return nil, errors.NewError("invalid path", http.StatusBadRequest)
+	// }
+
+	// if _, err := os.Stat(fullPath); err != nil {
+	// 	return nil, errors.NewError("file already exists", http.StatusConflict)
+	// }
+
+	// if payload.IsDir {
+	// 	//create directory
+	// 	if err := os.MkdirAll(fullPath, 0755); err != nil {
+	// 		return nil, errors.NewError("failed to create directory", http.StatusInternalServerError)
+	// 	}
+
+	// 	return &dto.FileContentDTO{
+	// 		Path:    payload.Path,
+	// 		Name:    filepath.Base(payload.Path),
+	// 		Content: "",
+	// 	}, nil
+	// } else {
+	// 	//create file
+	// 	//create parent directory if doesnt exist
+	// 	parentDir := filepath.Dir(fullPath)
+	// 	if err := os.MkdirAll(parentDir, 0755); err != nil {
+	// 		return nil, errors.NewError("faied to create parent directory", http.StatusInternalServerError)
+	// 	}
+
+	// 	//create file
+	// 	if err := os.WriteFile(fullPath, []byte(payload.Content), 0644); err != nil {
+	// 		return nil, errors.NewError("failed to create file", http.StatusInternalServerError)
+	// 	}
+
+	// 	return &dto.FileContentDTO{
+	// 		Path:    payload.Path,
+	// 		Name:    filepath.Base(payload.Path),
+	// 		Content: payload.Content,
+	// 	}, nil
+	// }
 
 	// file := &domain.ProjectFile{
 	// 	ProjectID: projectId,
@@ -198,14 +247,16 @@ func (s *FileService) UpdateFile(ctx context.Context, projectId, userId int, pay
 		return errors.NewError("forbidden", http.StatusForbidden)
 	}
 
-	workspacePath := s.getWorkspacePath(userId, projectId)
-	fullPath := filepath.Join(workspacePath, payload.Path)
+	return s.containerManager.CopyFileToContainer(ctx, project.ContainerID, payload.Path, []byte(payload.Content))
 
-	if !strings.HasPrefix(fullPath, workspacePath) {
-		return errors.NewError("invalid path", http.StatusBadRequest)
-	}
+	// workspacePath := s.getWorkspacePath(userId, projectId)
+	// fullPath := filepath.Join(workspacePath, payload.Path)
 
-	return os.WriteFile(fullPath, []byte(payload.Content), 0644)
+	// if !strings.HasPrefix(fullPath, workspacePath) {
+	// 	return errors.NewError("invalid path", http.StatusBadRequest)
+	// }
+
+	// return os.WriteFile(fullPath, []byte(payload.Content), 0644)
 
 	// existing, err := s.fileRepo.GetFileByID(ctx, fileId)
 	// if err != nil {
@@ -242,22 +293,29 @@ func (s *FileService) DeleteFile(ctx context.Context, projectId, userId int, pat
 		return errors.NewError("forbidden", http.StatusForbidden)
 	}
 
-	workspacePath := s.getWorkspacePath(userId, projectId)
-	fullPath := filepath.Join(workspacePath, path)
-
-	if !strings.HasPrefix(fullPath, workspacePath) {
-		return errors.NewError("invalid path", http.StatusBadRequest)
-	}
-
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		return errors.NewError("file not found", http.StatusNotFound)
-	}
-
-	if err := os.Remove(fullPath); err != nil {
-		return errors.NewError("failed to delete file", http.StatusInternalServerError)
+	_, _, err = s.containerManager.ExecInContainer(ctx, project.ContainerID, []string{"rm", "-f", path})
+	if err != nil {
+		return errors.NewError(err.Error(), http.StatusInternalServerError)
 	}
 
 	return nil
+
+	// workspacePath := s.getWorkspacePath(userId, projectId)
+	// fullPath := filepath.Join(workspacePath, path)
+
+	// if !strings.HasPrefix(fullPath, workspacePath) {
+	// 	return errors.NewError("invalid path", http.StatusBadRequest)
+	// }
+
+	// if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+	// 	return errors.NewError("file not found", http.StatusNotFound)
+	// }
+
+	// if err := os.Remove(fullPath); err != nil {
+	// 	return errors.NewError("failed to delete file", http.StatusInternalServerError)
+	// }
+
+	// return nil
 	// file, err := s.fileRepo.GetFileByID(ctx, fileId)
 	// if err != nil {
 	// 	return errors.NewError("file not found", http.StatusNotFound)
@@ -295,14 +353,14 @@ func (s *FileService) DeleteFile(ctx context.Context, projectId, userId int, pat
 // 	}, nil
 // }
 
-func (s *FileService) getDBFileContent(ctx context.Context, projectId int, path string) (*dto.FileContentDTO, error) {
-	file, err := s.fileRepo.GetFileContent(ctx, projectId, path)
-	if err != nil {
-		return nil, errors.NewError("failed to get files", http.StatusInternalServerError)
-	}
+// func (s *FileService) getDBFileContent(ctx context.Context, projectId int, path string) (*dto.FileContentDTO, error) {
+// 	file, err := s.fileRepo.GetFileContent(ctx, projectId, path)
+// 	if err != nil {
+// 		return nil, errors.NewError("failed to get files", http.StatusInternalServerError)
+// 	}
 
-	return dto.ToFileContentDTO(file), nil
-}
+// 	return dto.ToFileContentDTO(file), nil
+// }
 
 // func (s *FileService) getGithubFileTree(ctx context.Context, project *domain.Project) ([]dto.FileNodeDTO, error) {
 // 	token, err := s.decryptGithubToken(ctx, project)
@@ -339,27 +397,27 @@ func (s *FileService) getDBFileContent(ctx context.Context, projectId int, path 
 // 	return nodes, nil
 // }
 
-func (s *FileService) getDBFileTree(ctx context.Context, projectId int) ([]dto.FileNodeDTO, error) {
-	files, err := s.fileRepo.GetFiles(ctx, projectId)
-	if err != nil {
-		return nil, errors.NewError("failed to get files", http.StatusInternalServerError)
-	}
+// func (s *FileService) getDBFileTree(ctx context.Context, projectId int) ([]dto.FileNodeDTO, error) {
+// 	files, err := s.fileRepo.GetFiles(ctx, projectId)
+// 	if err != nil {
+// 		return nil, errors.NewError("failed to get files", http.StatusInternalServerError)
+// 	}
 
-	nodes := make([]dto.FileNodeDTO, len(files))
-	for i, file := range files {
-		nodes[i] = dto.FileNodeDTO{
-			Path: file.FilePath,
-			Name: getFileName(file.FilePath),
-			Type: "file", //REVISE
-		}
-	}
+// 	nodes := make([]dto.FileNodeDTO, len(files))
+// 	for i, file := range files {
+// 		nodes[i] = dto.FileNodeDTO{
+// 			Path: file.FilePath,
+// 			Name: getFileName(file.FilePath),
+// 			Type: "file", //REVISE
+// 		}
+// 	}
 
-	return nodes, nil
-}
+// 	return nodes, nil
+// }
 
-func (s *FileService) getWorkspacePath(userId, projectId int) string {
-	return filepath.Join(s.workSpaceRoot, fmt.Sprintf("user_%d", userId), fmt.Sprintf("project_%d", projectId))
-}
+// func (s *FileService) getWorkspacePath(userId, projectId int) string {
+// 	return filepath.Join(s.workSpaceRoot, fmt.Sprintf("user_%d", userId), fmt.Sprintf("project_%d", projectId))
+// }
 
 // func (s *FileService) decryptGithubToken(ctx context.Context, project *domain.Project) (string, error) {
 // 	user, err := s.userRepo.GetUserByID(ctx, project.UserID)
@@ -379,7 +437,7 @@ func (s *FileService) getWorkspacePath(userId, projectId int) string {
 // 	return password.Decrypt(user.GithubToken, key)
 // }
 
-func getFileName(path string) string {
-	parts := strings.Split(path, "/")
-	return parts[len(parts)-1]
-}
+// func getFileName(path string) string {
+// 	parts := strings.Split(path, "/")
+// 	return parts[len(parts)-1]
+// }

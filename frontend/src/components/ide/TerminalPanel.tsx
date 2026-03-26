@@ -88,6 +88,8 @@ function TerminalInstance({
         process.env.NODE_ENV === "development"
           ? "ws://localhost:8080"
           : process.env.NEXT_PUBLIC_WS_URL;
+      // const base = process.env.NEXT_PUBLIC_WS_URL;
+      console.log("base: ", base);
       try {
         const { data } = await api.post("/api/auth/ws-ticket");
         wsUrl = `${base}/api/v1/projects/${projectId}/terminal?ticket=${data.ticket}`;

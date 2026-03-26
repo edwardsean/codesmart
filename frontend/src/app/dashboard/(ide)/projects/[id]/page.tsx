@@ -68,6 +68,7 @@ export default function ProjectCodePage() {
   async function handleSave() {
     if (!activeFile || !fileData) return; //if no active file or not in workspace
     const content = editedContent[activeFile];
+
     if (content === undefined) return; //nothing to save
 
     setSaveStatus("saving");

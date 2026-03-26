@@ -8,6 +8,7 @@ import (
 
 	"github.com/edwardsean/codesmart/backend/internal/clients"
 	"github.com/edwardsean/codesmart/backend/internal/config"
+	"github.com/edwardsean/codesmart/backend/internal/container"
 	"github.com/edwardsean/codesmart/backend/internal/repository/postgres"
 	"github.com/edwardsean/codesmart/backend/internal/repository/redis"
 	"github.com/edwardsean/codesmart/backend/internal/service/auth"
@@ -44,6 +45,11 @@ func (s *APIServer) Run() error {
 
 	subrouter := router.PathPrefix("/api/v1").Subrouter() //groups routes under api/v1
 
+	dockerContainerManager, err := container.NewContainerManager()
+	if err != nil {
+		log.Fatalf("failed to load docker container manager: %w", err)
+	}
+
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	githubClient := clients.NewGithubClient(httpClient)
 
@@ -57,14 +63,14 @@ func (s *APIServer) Run() error {
 	userService := user.NewUserService(userRepository)
 	authService := auth.NewAuthService(userRepository, tokenRedisRepository)
 	githubService := github.NewGithubService(githubClient)
-	projectService := project.NewProjectService(projectRepository, projectFileRepository, userRepository, githubClient)
-	projectFileService := file.NewFileService(projectRepository, projectFileRepository, userRepository, githubClient)
+	projectService := project.NewProjectService(projectRepository, projectFileRepository, userRepository, githubClient, dockerContainerManager)
+	projectFileService := file.NewFileService(projectRepository, userRepository, githubClient, dockerContainerManager)
 
 	authHandler := NewAuthHandler(userService, oAuthService, authService) //passess it to the handler where you can call the handler methods like login and register
 	githubHandler := NewGithubHandler(githubService)
 	projectHandler := NewProjectHandler(projectService)
 	projectFileHandler := NewFileHandler(projectFileService)
-	terminalHander := NewTerminalHandler(authService, userService)
+	terminalHander := NewTerminalHandler(authService, userService, projectService, dockerContainerManager)
 
 	githubHandler.RegisterRoutes(subrouter, authService)
 	authHandler.RegisterRoutes(subrouter)

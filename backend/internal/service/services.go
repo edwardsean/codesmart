@@ -38,6 +38,7 @@ type ProjectService interface {
 	CreateProject(ctx context.Context, userId int, payload dto.CreateProjectPayload) (*dto.ProjectResponseDTO, error)
 	GetProjectByID(ctx context.Context, projectId int, userId int) (*dto.ProjectResponseDTO, error)
 	DeleteProject(ctx context.Context, projectId int, userId int) error
+	Close() error
 }
 
 type FileService interface {

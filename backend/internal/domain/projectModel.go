@@ -10,6 +10,10 @@ type Project struct {
 	Language    Language    `json:"language"` //Primary programming language, determines which executor to use and syntax highlighting
 	Mode        ProjectMode `json:"mode"`     // "help" or "learn"
 
+	//For docker container
+	ContainerID string `json:"container_id"`
+	VolumeName  string `json:"volume_name"`
+
 	// AI fills these after analysis
 	ProjectType string     `json:"project_type,omitempty"` //Category of project, e.g. "web", "cli", "api"
 	Difficulty  Difficulty `json:"difficulty,omitempty"`   //shown on project card

@@ -3,16 +3,12 @@ package project
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 
 	"github.com/edwardsean/codesmart/backend/internal/clients"
 	"github.com/edwardsean/codesmart/backend/internal/config"
+	"github.com/edwardsean/codesmart/backend/internal/container"
 	"github.com/edwardsean/codesmart/backend/internal/domain"
 	"github.com/edwardsean/codesmart/backend/internal/dto"
 	"github.com/edwardsean/codesmart/backend/internal/repository"
@@ -22,15 +18,16 @@ import (
 )
 
 type ProjectService struct {
-	projectRepo   repository.ProjectRepository
-	fileRepo      repository.ProjectFileRepository
-	userRepo      repository.UserRepository
-	githubClient  clients.GithubClient
-	workSpaceRoot string
+	projectRepo      repository.ProjectRepository
+	fileRepo         repository.ProjectFileRepository
+	userRepo         repository.UserRepository
+	githubClient     clients.GithubClient
+	containerManager *container.ContainerManager
+	workSpaceRoot    string
 }
 
-func NewProjectService(projectRepo repository.ProjectRepository, fileRepo repository.ProjectFileRepository, userRepo repository.UserRepository, githubClient clients.GithubClient) *ProjectService {
-	return &ProjectService{projectRepo: projectRepo, fileRepo: fileRepo, userRepo: userRepo, githubClient: githubClient, workSpaceRoot: config.Envs.WorkSpaceRoot}
+func NewProjectService(projectRepo repository.ProjectRepository, fileRepo repository.ProjectFileRepository, userRepo repository.UserRepository, githubClient clients.GithubClient, cm *container.ContainerManager) *ProjectService {
+	return &ProjectService{projectRepo: projectRepo, fileRepo: fileRepo, userRepo: userRepo, githubClient: githubClient, workSpaceRoot: config.Envs.WorkSpaceRoot, containerManager: cm}
 }
 
 func (s *ProjectService) GetProjects(ctx context.Context, userID int) ([]dto.ProjectListItemDTO, error) {
@@ -87,19 +84,21 @@ func (s *ProjectService) CreateProject(ctx context.Context, userID int, payload 
 		return nil, errors.NewError("failed to create project", http.StatusInternalServerError)
 	}
 
-	if payload.SourceType == domain.SourceGithub {
+	var result *dto.ProjectResponseDTO
+	var err error
+	if payload.SourceType == domain.SourceGithub && payload.SourceURL != "" {
 		// go s.seedGithubFiles(context.Background(), project, userID)
-		if err := s.cloneGithubProject(ctx, userID, project); err != nil {
-			log.Printf("error: %v", err)
+		result, err = s.cloneGithubProject(ctx, userID, project)
+		if err != nil {
 			return nil, err
 		}
 	} else {
-		if err := s.initScratchWorkspace(ctx, userID, project); err != nil {
+		result, err = s.initScratchWorkspace(ctx, userID, project)
+		if err != nil {
 			return nil, err
 		}
 	}
 
-	result := dto.ToProjectResponseDTO(project)
 	return result, nil
 }
 
@@ -115,6 +114,13 @@ func (s *ProjectService) DeleteProject(ctx context.Context, id int, userID int) 
 		return errors.NewError("forbidden", http.StatusForbidden)
 	}
 
+	//delete the container and volume if they exist
+	if project.ContainerID != "" && project.VolumeName != "" {
+		if err := s.containerManager.DeleteWorkspaceContainer(ctx, project.ContainerID, project.VolumeName); err != nil {
+			log.Printf("Warning: failed to delete container for project %d: %v", id, err)
+		}
+	}
+
 	if err := s.projectRepo.DeleteProject(ctx, id); err != nil {
 		return errors.NewError("failed to delete project", http.StatusInternalServerError)
 	}
@@ -122,71 +128,108 @@ func (s *ProjectService) DeleteProject(ctx context.Context, id int, userID int) 
 	return nil
 }
 
-func (s *ProjectService) createWorkspace(userId, projectId int) (string, error) {
-	workspacePath := filepath.Join(s.workSpaceRoot, fmt.Sprintf("user_%d", userId), fmt.Sprintf("project_%d", projectId))
+// func (s *ProjectService) createWorkspace(userId, projectId int) (string, error) {
+// 	workspacePath := filepath.Join(s.workSpaceRoot, fmt.Sprintf("user_%d", userId), fmt.Sprintf("project_%d", projectId))
 
-	if err := os.MkdirAll(workspacePath, 0755); err != nil {
-		return "", errors.NewError("failed to create workspace", http.StatusInternalServerError)
-	}
+// 	if err := os.MkdirAll(workspacePath, 0755); err != nil {
+// 		return "", errors.NewError("failed to create workspace", http.StatusInternalServerError)
+// 	}
 
-	return workspacePath, nil
-}
+// 	return workspacePath, nil
+// }
 
-func (s *ProjectService) initScratchWorkspace(ctx context.Context, userId int, project *domain.Project) error {
-	workspacePath, err := s.createWorkspace(userId, project.ID)
+func (s *ProjectService) initScratchWorkspace(ctx context.Context, userId int, project *domain.Project) (*dto.ProjectResponseDTO, error) {
+	workspaceInfo, err := s.containerManager.CreateWorkspaceContainer(ctx, userId, project.ID, "", "")
 	if err != nil {
-		return err
+		return nil, errors.NewError(err.Error(), http.StatusInternalServerError)
 	}
 
-	cmd := exec.CommandContext(ctx, "git", "init", workspacePath)
-	if err := cmd.Run(); err != nil {
-		return errors.NewError("git init failed", http.StatusInternalServerError)
+	project.ContainerID = workspaceInfo.ContainerID
+	project.VolumeName = workspaceInfo.VolumeName
+	if err := s.projectRepo.UpdateProject(ctx, project); err != nil {
+		log.Printf("Warning: failed to update project with container info: %v", err)
 	}
 
-	starterPath := filepath.Join(workspacePath, "main.go")
-	os.WriteFile(starterPath, []byte("package main\n\nfunc main() {\n\n}\n"), 0644)
-	exec.CommandContext(ctx, "git", "-C", workspacePath, "add", ".").Run()
-	exec.CommandContext(ctx, "git", "-C", workspacePath,
-		"commit", "-m", "Initial commit").Run()
+	result := dto.ToProjectResponseDTO(project)
+	return result, nil
+	// workspacePath, err := s.createWorkspace(userId, project.ID)
+	// if err != nil {
+	// 	return err
+	// }
 
-	return nil
+	// cmd := exec.CommandContext(ctx, "git", "init", workspacePath)
+	// if err := cmd.Run(); err != nil {
+	// 	return errors.NewError("git init failed", http.StatusInternalServerError)
+	// }
+
+	// starterPath := filepath.Join(workspacePath, "main.go")
+	// os.WriteFile(starterPath, []byte("package main\n\nfunc main() {\n\n}\n"), 0644)
+	// exec.CommandContext(ctx, "git", "-C", workspacePath, "add", ".").Run()
+	// exec.CommandContext(ctx, "git", "-C", workspacePath,
+	// 	"commit", "-m", "Initial commit").Run()
+
+	// return nil
 }
 
-func (s *ProjectService) cloneGithubProject(ctx context.Context, userId int, project *domain.Project) error {
+func (s *ProjectService) cloneGithubProject(ctx context.Context, userId int, project *domain.Project) (*dto.ProjectResponseDTO, error) {
 	user, err := s.userRepo.GetUserByID(ctx, userId)
 	if err != nil {
-		return errors.NewError("failed to get user", http.StatusInternalServerError)
+		s.projectRepo.DeleteProject(ctx, project.ID) //rollback
+		return nil, errors.NewError("failed to get user", http.StatusInternalServerError)
 	}
 
 	if user.GithubToken == "" {
-		return errors.NewError("user does not have github token", http.StatusBadRequest)
+		s.projectRepo.DeleteProject(ctx, project.ID)
+		return nil, errors.NewError("user does not have github token", http.StatusBadRequest)
 	}
 
 	encryptionKey, err := base64.StdEncoding.DecodeString(config.Envs.EncryptionKey)
 	if err != nil {
-		return errors.NewError("failed to decode encryption key", http.StatusInternalServerError)
+		s.projectRepo.DeleteProject(ctx, project.ID)
+		return nil, errors.NewError("failed to decode encryption key", http.StatusInternalServerError)
 	}
 
 	token, err := password.Decrypt(user.GithubToken, encryptionKey)
 	if err != nil {
-		return errors.NewError("failed to decrypt github token", http.StatusInternalServerError)
+		s.projectRepo.DeleteProject(ctx, project.ID)
+		return nil, errors.NewError("failed to decrypt github token", http.StatusInternalServerError)
 	}
 
-	authURL := strings.Replace(project.SourceURL, "https://", fmt.Sprintf("https://oauth2:%s@", token), 1) //TODO: change this later maybe use GithubApp
-	workspacePath, err := s.createWorkspace(user.ID, project.ID)
+	workspaceInfo, err := s.containerManager.CreateWorkspaceContainer(ctx, userId, project.ID, project.SourceURL, token)
 	if err != nil {
-		return err
+		s.projectRepo.DeleteProject(ctx, project.ID)
+		return nil, errors.NewError(err.Error(), http.StatusInternalServerError)
 	}
 
-	//clone using the helper
-	cmd := exec.CommandContext(ctx, "git", "clone", authURL, workspacePath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Printf("git clone failed: %s", string(output))
-		return errors.NewError("git clone failed", http.StatusInternalServerError)
+	//update project container info
+	project.ContainerID = workspaceInfo.ContainerID
+	project.VolumeName = workspaceInfo.VolumeName
+	if err := s.projectRepo.UpdateProject(ctx, project); err != nil {
+		log.Printf("Warning: failed to update project with container info: %v", err)
 	}
 
-	return nil
+	result := dto.ToProjectResponseDTO(project)
+	return result, nil
+
+	// authURL := strings.Replace(project.SourceURL, "https://", fmt.Sprintf("https://oauth2:%s@", token), 1) //TODO: change this later maybe use GithubApp
+	// workspacePath, err := s.createWorkspace(user.ID, project.ID)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// //clone using the helper
+	// cmd := exec.CommandContext(ctx, "git", "clone", authURL, workspacePath)
+	// output, err := cmd.CombinedOutput()
+	// if err != nil {
+	// 	log.Printf("git clone failed: %s", string(output))
+	// 	return errors.NewError("git clone failed", http.StatusInternalServerError)
+	// }
+
+	// return nil
+}
+
+func (s *ProjectService) Close() error {
+	return s.containerManager.Close()
 }
 
 // func (s *ProjectService) seedGithubFiles(ctx context.Context, project *domain.Project, userId int) {

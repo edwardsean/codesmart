@@ -70,32 +70,6 @@ export function buildTree(flat: FileNode[]): FileNode[]{
 
   sortNodes(root);
   return root;
-
-
-
-  // // sort so dirs come before files, then alphabetically
-  // const sorted = [...flat].sort((a, b) => {
-  //   if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-  //   return a.path.localeCompare(b.path);
-  // });
-
-  // for (const node of sorted) {
-  //   const parts = node.path.split("/");
-  //   if (parts.length === 1) {
-  //     root.push(node);
-  //     map.set(node.path, node);
-  //   } else {
-  //     const parentPath = parts.slice(0, -1).join("/");
-  //     const parent = map.get(parentPath);
-  //     if (parent) {
-  //       if (!parent.children) parent.children = [];
-  //       parent.children.push(node);
-  //     }
-  //     map.set(node.path, node);
-  //   }
-  // }
-
-  // return root;
 }
 
 
