@@ -47,4 +47,5 @@ type FileService interface {
 	CreateFile(ctx context.Context, projectId int, userId int, payload dto.CreateFilePayload) (*dto.FileContentDTO, error)
 	UpdateFile(ctx context.Context, projectId, userId int, payload dto.UpdateFilePayload) error
 	DeleteFile(ctx context.Context, projectId, userId int, path string) error
+	RenameFile(ctx context.Context, projectId, userId int, oldPath, newPath string) error
 }

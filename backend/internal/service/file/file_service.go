@@ -236,6 +236,25 @@ func (s *FileService) CreateFile(ctx context.Context, projectId int, userId int,
 	// return dto.ToFileContentDTO(file), nil
 }
 
+func (s *FileService) RenameFile(ctx context.Context, projectId, userId int, oldPath, newPath string) error {
+	project, err := s.projectRepo.GetProjectByID(ctx, projectId)
+	if err != nil {
+		return errors.NewError("project not found", http.StatusNotFound)
+	}
+
+	//ownership
+	if project.UserID != userId {
+		return errors.NewError("forbidden", http.StatusForbidden)
+	}
+
+	err = s.containerManager.RenameInContainer(ctx, project.ContainerID, oldPath, newPath)
+	if err != nil {
+		return errors.NewError(err.Error(), http.StatusInternalServerError)
+	}
+
+	return nil
+}
+
 func (s *FileService) UpdateFile(ctx context.Context, projectId, userId int, payload dto.UpdateFilePayload) error {
 	project, err := s.projectRepo.GetProjectByID(ctx, projectId)
 	if err != nil {

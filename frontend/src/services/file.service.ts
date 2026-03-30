@@ -3,7 +3,7 @@ import { AxiosInstance } from "axios";
 import { FileNode, FileContent } from "@/types/project.file.types";
 
 
-interface CreateFilePayload {
+export interface CreateFilePayload {
   path: string;
   content?: string;
   language?: string;
@@ -13,6 +13,11 @@ interface CreateFilePayload {
 export interface UpdateFilePayload {
   path: string;    // rename
   content?: string; // save
+}
+
+export interface RenameFilePayload {
+  old_path: string;
+  new_path: string;
 }
 
 // converts flat list from API into nested tree structure
@@ -95,6 +100,10 @@ export const fileService = (api: AxiosInstance) => ({
 
   updateFile: async (projectId: number, payload: UpdateFilePayload): Promise<void> => {
     await api.put(`/api/projects/${projectId}/files`, payload);
+  },
+
+  renameFile: async (projectId: number, payload: RenameFilePayload): Promise<void> => {
+    await api.put(`/api/projects/${projectId}/files/rename`, payload);
   },
 
   deleteFile: async (projectId: number, path: string): Promise<void> => {

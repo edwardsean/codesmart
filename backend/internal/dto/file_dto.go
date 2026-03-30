@@ -31,6 +31,11 @@ type UpdateFilePayload struct {
 	Language domain.Language `json:"language"`
 }
 
+type RenameFilePayload struct {
+	OldPath string `json:"old_path" validate:"required"`
+	NewPath string `json:"new_path" validate:"required"`
+}
+
 type FileTreeResult struct {
 	Tree      []FileTreeItem `json:"tree"`
 	Truncated bool           `json:"truncated"`

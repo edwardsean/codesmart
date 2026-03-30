@@ -33,6 +33,7 @@ func (h *FileHandler) RegisterRoutes(router *mux.Router, authService service.Aut
 	r.HandleFunc("/content", h.handleGetFileContent).Methods("GET")
 	r.HandleFunc("", h.handleCreateFile).Methods("POST")
 	r.HandleFunc("", h.handleUpdateFile).Methods("PUT")
+	r.HandleFunc("/rename", h.handleRenameFile).Methods("PUT")
 	r.HandleFunc("/{path}", h.handleDeleteFile).Methods("DELETE")
 }
 
@@ -114,6 +115,36 @@ func (h *FileHandler) handleCreateFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.WriteJSON(w, http.StatusCreated, map[string]any{"file": file})
+}
+
+func (h *FileHandler) handleRenameFile(w http.ResponseWriter, r *http.Request) {
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		response.WriteError(w, errors.ErrInvalidCredentials)
+		return
+	}
+
+	projectId, err := parseProjectIDParam(r)
+	if err != nil {
+		response.WriteError(w, errors.NewError("invalid project id", http.StatusBadRequest))
+		return
+	}
+
+	var payload dto.RenameFilePayload
+	if err := utils.ParseJson(r.Body, &payload); err != nil {
+		log.Printf("failed to parse rename file payload: %v", err)
+		response.WriteError(w, errors.NewError(err.Error(), http.StatusBadRequest))
+		return
+	}
+
+	err = h.fileService.RenameFile(r.Context(), projectId, user.ID, payload.OldPath, payload.NewPath)
+	if err != nil {
+		log.Printf("failed to rename file: %v", err)
+		response.WriteError(w, err)
+	}
+
+	response.WriteJSON(w, http.StatusOK, nil)
+
 }
 
 func (h *FileHandler) handleUpdateFile(w http.ResponseWriter, r *http.Request) {

@@ -187,6 +187,14 @@ func (m *ContainerManager) CreateWorkspaceContainer(ctx context.Context, userId,
 			"codesmart.user":    fmt.Sprintf("%d", userId),
 			"codesmart.project": fmt.Sprintf("%d", projectId),
 		},
+		Env: []string{
+			"npm_config_cache=/workspace/.npm-cache", //tells npm where to store its cache
+			"GOPATH=/workspace/.go",                  //tells Go where to store modules and binaries
+			"GOCACHE=/workspace/.go-cache",           //tells go where to store build cache
+			"PIP_CACHE_DIR=/workspace/.pip-cache",    //tells pip where to store its cache
+			"RUSTUP_HOME=/workspace/.rustup",         //tells rustup where to store rust toolchains
+			"PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", //ensures the PATH includes standard system directories, so installed tools like git, node, npm, etc. are found
+		},
 	}
 	hostConfig := &container.HostConfig{ //how the container runs on host
 		Binds:          []string{volumeName + ":/workspace"}, //volume mounted into container, "take the volume, and attach it to the container at the path /workspace"
@@ -236,9 +244,9 @@ func (m *ContainerManager) CreateWorkspaceContainer(ctx context.Context, userId,
 		if gitToken != "" {
 			//TODO: replace this token insertion with github apps later
 			authURL := strings.Replace(gitURL, "https://", fmt.Sprintf("https://oauth:%s@", gitToken), 1)
-			cloneCmd = []string{"git", "clone", authURL, "/workspace"}
+			cloneCmd = []string{"git", "clone", authURL, "."}
 		} else {
-			cloneCmd = []string{"git", "clone", gitURL, "/workspace"} //can it work without token? maybe for public repos only
+			cloneCmd = []string{"git", "clone", gitURL, "."} //can it work without token? maybe for public repos only
 		}
 	} else { //scratch
 		cloneCmd = []string{"sh", "-c", "cd /workspace && git init && echo '# Scratch Project' > README.md && git add . && git commit -m 'Initial commit'"}
@@ -250,11 +258,21 @@ func (m *ContainerManager) CreateWorkspaceContainer(ctx context.Context, userId,
 	stdout, stderr, err := m.ExecInContainer(ctx, containerID, cloneCmd)
 	if err != nil {
 		log.Printf("git clone failed: %v", err)
-		return &WorkspaceInfo{ContainerID: containerID, VolumeName: volumeName}, nil
+		log.Printf("Stdout: %s", stdout)
+		log.Printf("Stderr: %s", stderr)
+		m.cli.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true})
+		m.cli.VolumeRemove(ctx, volumeName, true)
+		return nil, fmt.Errorf("failed to clone repo: %w", err)
 	}
 
-	log.Printf("Stdout: %s", stdout)
-	log.Printf("Stderr: %s", stderr)
+	//create cache dirs in volume to avoid lost of cache when container is not there, so that npm installs, pip installs, go builds, etc. are faster on subsequent runs of the container
+	_, _, err = m.ExecInContainer(ctx, containerID, []string{
+		"sh", "-c",
+		"mkdir -p /workspace/.npm-cache /workspace/.pip-cache /workspace/.go /workspace/.go-cache && chown -R workspace:workspace /workspace",
+	}) //the final chown ensures that everything under /workspce is owned by the workspace user (though the volume mount should already respect the ownership of te mount point, but it doesnt hurt to be safe)
+	if err != nil {
+		log.Printf("failed to create cache directories: %v", err)
+	}
 
 	// execCreateResp, err := m.cli.ContainerExecCreate(ctx, containerID, container.ExecOptions{
 	// 	Cmd:          cloneCmd,
@@ -320,7 +338,8 @@ func (m *ContainerManager) ExecInContainer(ctx context.Context, containerId stri
 		Cmd:          cmd,
 		AttachStdout: true,
 		AttachStderr: true,
-		User:         "workspace",
+		User:         "workspace", //each command runs as workspace user
+		//doesnt have working dir, so it uses the container config's working dir which is /workspace
 	})
 	if err != nil {
 		return "", "", err
@@ -530,13 +549,19 @@ func (m *ContainerManager) ListFiles(ctx context.Context, containerId string) ([
 	return results, nil
 }
 
+func (m *ContainerManager) RenameInContainer(ctx context.Context, containerId, oldPath, newPath string) error {
+
+	_, _, err := m.ExecInContainer(ctx, containerId, []string{"mv", oldPath, newPath})
+	return err
+}
+
 // returns a hijacked connection to a new bash shell inside the container
 // the caller must close the returned hijacked response when done
 func (m *ContainerManager) AttachTerminal(ctx context.Context, containerId string) (*TerminalSession, error) {
 	execCreateResp, err := m.cli.ContainerExecCreate(ctx, containerId, container.ExecOptions{
 		Cmd:          []string{"/bin/bash"}, //restricted bash, prevents cd to parent directories, prevents changing PATH, prevents executing commands with / in the path
 		User:         "workspace",           //start the shell as the workspace user
-		WorkingDir:   "/workspace",
+		WorkingDir:   "/workspace",          //sets the current working directory when the command starts. It's like running cd /workspace before any command
 		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,

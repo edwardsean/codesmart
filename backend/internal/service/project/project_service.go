@@ -90,11 +90,13 @@ func (s *ProjectService) CreateProject(ctx context.Context, userID int, payload 
 		// go s.seedGithubFiles(context.Background(), project, userID)
 		result, err = s.cloneGithubProject(ctx, userID, project)
 		if err != nil {
+			s.projectRepo.DeleteProject(ctx, project.ID) //rollback
 			return nil, err
 		}
 	} else {
 		result, err = s.initScratchWorkspace(ctx, userID, project)
 		if err != nil {
+			s.projectRepo.DeleteProject(ctx, project.ID) //rollback
 			return nil, err
 		}
 	}

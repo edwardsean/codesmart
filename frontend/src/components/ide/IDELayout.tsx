@@ -22,6 +22,12 @@ import { FileNode } from "@/types/project.file.types";
 import { fileService } from "@/services/file.service";
 import useAxiosPrivate from "@/hooks/useAxiosPrivate";
 import axios from "axios";
+import {
+  useFileTree,
+  useCreateFile,
+  useDeleteFile,
+  useRenameFile,
+} from "@/hooks/query/useFileTree";
 
 type ActivityPanel = "files" | "nav" | null;
 
@@ -47,6 +53,10 @@ function IDEShell({ children, projectId, projectTitle }: IDELayoutProps) {
   console.log("files in shell: ", files);
   const api = useAxiosPrivate();
   const apiFile = fileService(api);
+
+  const { mutateAsync: createFile } = useCreateFile(projectId);
+  const { mutateAsync: renameFile } = useRenameFile(projectId);
+  const { mutateAsync: deleteFile } = useDeleteFile(projectId);
 
   const [activePanel, setActivePanel] = useState<ActivityPanel>("files");
   const [panelCollapsed, setPanelCollapsed] = useState(false);
@@ -76,13 +86,7 @@ function IDEShell({ children, projectId, projectTitle }: IDELayoutProps) {
     if (!name) return;
     const path = parentPath ? `${parentPath}/${name}` : name;
     try {
-      await apiFile.createFile(Number(projectId), {
-        path,
-        content: "",
-        is_dir: isDir,
-      });
-      const tree = await apiFile.getFileTree(Number(projectId));
-      setFiles(tree);
+      await createFile({ path, is_dir: isDir });
     } catch (err) {
       if (axios.isAxiosError(err)) console.error(err.response?.data?.message);
     }
@@ -92,12 +96,11 @@ function IDEShell({ children, projectId, projectTitle }: IDELayoutProps) {
     if (!node) return;
     const parts = node.path.split("/");
     parts[parts.length - 1] = newName;
-    const newPath = parts.join("/");
+    const new_path = parts.join("/");
+
     try {
-      await apiFile.updateFile(Number(projectId), { path: newPath });
-      const tree = await apiFile.getFileTree(Number(projectId));
-      setFiles(tree);
-      if (activeFile && activeFile === node.path) setActiveFile(newPath);
+      await renameFile({ old_path: node.path, new_path });
+      if (activeFile && activeFile === node.path) setActiveFile(new_path);
     } catch (err) {
       if (axios.isAxiosError(err)) console.error(err.response?.data?.message);
     }
@@ -107,9 +110,7 @@ function IDEShell({ children, projectId, projectTitle }: IDELayoutProps) {
     if (!node) return;
     if (!confirm(`Delete ${node.name}?`)) return;
     try {
-      await apiFile.deleteFile(Number(projectId), node.path);
-      const tree = await apiFile.getFileTree(Number(projectId));
-      setFiles(tree);
+      await deleteFile(node.path);
       if (activeFile && activeFile === node.path) {
         setActiveFile("");
       }
@@ -358,43 +359,46 @@ export default function IDELayout({
   projectId,
   projectTitle,
 }: IDELayoutProps) {
-  const api = useAxiosPrivate();
-  const apiFile = fileService(api);
-  const { _hasHydrated, account } = useAuthStore();
-
   const [files, setFiles] = useState<FileNode[]>([]);
-  const [filesLoading, setFilesLoading] = useState(true);
   const [isGithub, setIsGithub] = useState(false);
+  console.log("IDELayout rendered");
+  const { data: fileTree, isLoading } = useFileTree(projectId);
 
   useEffect(() => {
-    if (!_hasHydrated || !account?.accessToken) return;
+    if (fileTree) {
+      setFiles(fileTree);
+    }
+  }, [fileTree, setFiles]);
 
-    const fetchFiles = async () => {
-      setFilesLoading(true);
-      try {
-        const tree = await apiFile.getFileTree(Number(projectId));
-        console.log("tree: ", tree);
-        setFiles(tree);
-      } catch (err) {
-        if (axios.isAxiosError(err)) {
-          console.error(
-            "failed to fetch file tree:",
-            err.response?.data?.message,
-          );
-        }
-      } finally {
-        setFilesLoading(false);
-      }
-    };
+  // useEffect(() => {
+  //   if (!_hasHydrated || !account?.accessToken) return;
 
-    fetchFiles();
-  }, [_hasHydrated, account?.accessToken, projectId]);
+  //   const fetchFiles = async () => {
+  //     setFilesLoading(true);
+  //     try {
+  //       const tree = await apiFile.getFileTree(Number(projectId));
+  //       console.log("tree: ", tree);
+  //       setFiles(tree);
+  //     } catch (err) {
+  //       if (axios.isAxiosError(err)) {
+  //         console.error(
+  //           "failed to fetch file tree:",
+  //           err.response?.data?.message,
+  //         );
+  //       }
+  //     } finally {
+  //       setFilesLoading(false);
+  //     }
+  //   };
+
+  //   fetchFiles();
+  // }, [_hasHydrated, account?.accessToken, projectId]);
 
   return (
     <IDEProvider
       projectId={projectId}
       files={files}
-      filesLoading={filesLoading}
+      filesLoading={isLoading}
       isGithub={isGithub}
       onSetFiles={setFiles}
     >
